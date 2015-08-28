@@ -6,7 +6,7 @@ groups:
 agents:
     ipsec_agent:
         group: endpoint_group
-        path: /users/melkins/projects/edgect/ipsec
+        path: /proj/edgect/share/ipsec
         execargs: {}
 
 eventstreams:
