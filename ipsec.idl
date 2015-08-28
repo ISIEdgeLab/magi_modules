@@ -1,0 +1,26 @@
+name: ipsec
+display: IPsec configuration agent
+description: This agent configures a full mesh of IPsec tunnels
+execute: thread
+mainfile: ipsec.py
+
+inherits: 
+    - DispatchAgent
+
+methods:
+    - name: startIpsec
+      help: start the IPsec tunnels
+      args: []
+
+    - name: stopIpsec
+      help: stop the IPsec tunnels
+      args: []
+
+variables:
+    - name: psk
+      help: pre-shared key used to encrypt data
+      type: string
+
+    - name: endpoints
+      help: list of dict() objects specifying IPsec gateways
+      type: list

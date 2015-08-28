@@ -1,0 +1,44 @@
+streamstarts: [main]
+
+groups:
+    endpoint_group: [crypto1, crypto2, crypto3]
+
+agents:
+    ipsec_agent:
+        group: endpoint_group
+        path: /users/melkins/projects/edgect/ipsec
+        execargs: {}
+
+eventstreams:
+    main:
+        - type: event
+          agent: ipsec_agent
+          method: setConfiguration
+          trigger: ipsecConfigured
+          args:
+              psk: "The quick brown fox jumps over the lazy dog"
+              endpoints:
+                  - {host: crypto1, ip: 10.1.10.1, subnet: 10.1.0.0/16}
+                  - {host: crypto2, ip: 10.2.10.1, subnet: 10.2.0.0/16}
+                  - {host: crypto3, ip: 10.3.10.1, subnet: 10.3.0.0/16}
+
+        - type: trigger
+          triggers: [{event: ipsecConfigured}]
+
+        - type: event
+          agent: ipsec_agent
+          method: startIpsec
+          trigger: ipsecStarted
+          args: {}
+
+        - type: trigger
+          triggers: [{timeout: 30000}]
+
+        - type: event
+          agent: ipsec_agent
+          method: stopIpsec
+          trigger: ipsecStopped
+          args: {}
+
+        - type: trigger
+          triggers: [{event: ipsecStopped, target: exit}]

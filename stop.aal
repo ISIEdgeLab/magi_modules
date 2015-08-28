@@ -1,0 +1,17 @@
+streamstarts: [main]
+
+groups:
+    endpoint_group: [crypto1, crypto2, crypto3]
+
+agents:
+    ipsec_agent:
+        group: endpoint_group
+        path: /users/melkins/projects/edgect/ipsec
+        execargs: {}
+
+eventstreams:
+    main:
+        - type: event
+          agent: ipsec_agent
+          method: stopIpsec
+          args: {}
