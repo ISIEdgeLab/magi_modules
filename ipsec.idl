@@ -7,6 +7,9 @@ mainfile: ipsec.py
 inherits: 
     - DispatchAgent
 
+software:
+    - strongswan
+
 methods:
     - name: startIpsec
       help: start the IPsec tunnels
