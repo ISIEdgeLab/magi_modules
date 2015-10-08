@@ -81,7 +81,8 @@ class ipsec(DispatchAgent):
     @agentmethod()
     def startIpsec(self, msg):
         log.info('starting ipsec')
-        run('ipsec start', log=log)
+        # use 'restart' to catch the case where the daemon is already running
+        run('ipsec restart', log=log)
 
     @agentmethod()
     def stopIpsec(self, msg):
