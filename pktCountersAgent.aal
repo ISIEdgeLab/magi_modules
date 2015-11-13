@@ -1,0 +1,108 @@
+
+streamstarts: [ packetCounter, bgTraffic ]
+
+groups:
+  pktCounters: [moat, feast]
+  servers: &serverNodes [moat]
+  clients: &clientNodes [feast]
+
+agents:
+  packetCounters:
+    group: pktCounters
+    dock: packetCounter
+    code: pktcounters
+    execargs: []
+
+  webServers:
+    group: servers
+    dock: web_server
+    code: apache
+    execargs: []
+
+  webClients:
+    group: clients
+    dock: web_client
+    code: http_wget
+    execargs: []
+
+eventstreams:
+  #####################################################
+  # background traffic stream
+  bgTraffic:
+  - type: event
+    agent: webClients
+    method: setConfiguration
+    args:
+       servers: *serverNodes
+       interval: "2"
+       sizes: "1000"
+       useSocks: False
+
+  - type: event
+    agent: webServers
+    method: startServer
+    trigger: webServerStarted
+    args: {} 
+
+  # Wait for the servers to start before starting the traffic from the clients.  
+  - type: trigger
+    triggers: [ {event: webServerStarted, agent: webServers} ]
+
+  - type: event
+    agent: webClients
+    method: startClient
+    trigger: webTrafficStarted
+    args: {}
+ 
+  # Wait for 60 seconds for user given "shutdown" trigger, then
+  # continue.  
+  - type: trigger
+    triggers: [ {event: shutdown} ]
+
+  - type: event
+    agent: webClients
+    method: stopTraffic
+    args: {}
+        
+  - type: event
+    agent: webServers
+    method: stopServer
+    args: {}
+
+  ###################################################################
+  packetCounter:
+  # start counting packets in the 10.1.1.0/24 subnet
+  - type: event
+    agent: packetCounters
+    method: setDefaults
+    args: {} 
+
+  - type: event
+    agent: packetCounters
+    method: setConfiguration
+    args: 
+      interval: 2
+
+  - type: event
+    agent: packetCounters
+    method: startCollection
+    args: {} 
+
+  # Wait for 60 seconds for user given "shutdown" trigger, then
+  # continue.  
+  - type: trigger
+    triggers: [ {event: shutdown, timeout: 60000} ]
+
+  # stop the counting and send a 'experimentEnd' trigger to 
+  # let the other streams know to stop and shutdown.
+  - type: event
+    agent: packetCounters
+    method: stopCollection
+    args: {}
+
+  # Tell the orch to unload all agents. 
+  - type: trigger
+    triggers: [ {timeout: 5000, target: exit} ]
+
+# Configure vim for editing. Make vim stupid. Not AAL stuff, please ignore.
+# vim: noautoindent:nosmartindent:nocindent:expandtab:filetype=:ts=2:sw=2
