@@ -1,0 +1,40 @@
+
+streamstarts: [ main ]
+
+groups:
+  allnodes: [chapel, control, feast, mine, moat, witch]
+
+agents:
+  nodeStats:
+    group: allnodes
+    dock: nodeStats
+    code: nodeStats
+    execargs: []
+
+eventstreams:
+  main: 
+  - type: event
+    agent: nodeStats
+    method: setConfiguration
+    args: 
+      interval: 5
+      experimentDescription: "This is a test about nothing."
+
+  - type: event
+    agent: nodeStats
+    method: startCollection
+    args: {}
+
+  - type: trigger
+    triggers: [{timeout: 30000}]
+
+  - type: event
+    agent: nodeStats
+    method: stopCollection
+    args: {}
+
+  # unload agents and exit
+  - type: trigger
+    triggers: [{target: exit, timeout: 3000}]
+
+# vim: noautoindent:nosmartindent:nocindent:expandtab:filetype=:ts=2:sw=2
