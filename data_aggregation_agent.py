@@ -27,7 +27,7 @@ class DataAggregationAgent(ReportingDispatchAgent):
         # "namespace" of the expression.
         self.reduce_method = 'sum(L)/len(L)'  # average
 
-        self.agent_key = None
+        self.agent_key = None           # may be a single value or a list.
         self.data_key = None
         self.node_key = 'host'          # only change if your node is under a different key.
         self.aggregation_period = 1     # period across which to aggregate the data (in seconds).
@@ -79,9 +79,11 @@ class DataAggregationAgent(ReportingDispatchAgent):
             # log.debug('Searching for {} within {} around {} for nodes in key {}'.format(
             #     self.data_key, self.agent_key, now, self.node_key))
             args = { 
+                'agent': {'$in': self.agent_key},
                 self.node_key: {'$in': nodes},
                 'created': {'$gte': float(now-self.aggregation_period-self.lag), '$lt': float(now-self.lag)}
             }
+
             filter_ = {
                 '_id': False,
                 self.data_key: True 
@@ -123,6 +125,9 @@ class DataAggregationAgent(ReportingDispatchAgent):
             if not getattr(self, key, None):
                 log.critical('No "{}" given in AAL. Unable to continue.'.format(key))
                 return False
+
+        # listify the agent key as we expect a list later.
+        self.agent_key = self.agent_key if type(self.agent_key) == list else [self.agent_key]
 
         return True
 
