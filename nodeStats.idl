@@ -4,6 +4,8 @@ display: Node Statistics
 description: An agent that collects general node information and CPU + load average statistics
 execute: socket 
 mainfile: nodeStats.py
+software:
+  - libdeterdash
 inherits:
   - ReportingDispatchAgent
 variables:

@@ -10,6 +10,7 @@ from magi.util.execl import execAndRead
 from magi.util.agent import agentmethod, ReportingDispatchAgent
 from magi.util.processAgent import initializeProcessAgent
 from runtimeStatsCollector import getRuntimeStatsCollector, PlatformNotSupportedException
+from libdeterdash import DeterDashboard
 
 import logging
 import os
@@ -139,24 +140,17 @@ class NodeStatsReporter(ReportingDispatchAgent):
 
             # setup visualiztion. We only setup the 'node' table. We could set up the others if we wanted. 
             if self.visualize:
-                viz_table = database.getCollection('viz_data')
-                for unit in ['cpu_usage', 'cpu_jiffies', 'load_average_1', 'load_average_5',
-                             'load_average_15', 'load_average_total']:
-                    log.debug('Inserting viz_data for {}'.format(unit))
-                    viz_table.insert({
-                        'datatype': 'horizon_chart',
-                        'display': 'Node Stats',
-                        'table': self.name + '_' + 'node',  
-                        'node_key': 'host',
-                        'units': [
-                            {'data_key': 'cpu_usage', 'display': 'CPU Usage', 'unit': ' '},
-                            {'data_key': 'cpu_jiffies', 'display': 'CPU Jiffies', 'unit': ' '},
-                            {'data_key': 'load_average_1', 'display': 'Load Avg. 1 Min', 'unit': ' '},
-                            {'data_key': 'load_average_5', 'display': 'Load Avg. 5 Min', 'unit': ' '},
-                            {'data_key': 'load_average_15', 'display': 'Load Avg. 15 Min', 'unit': ' '},
-                            {'data_key': 'load_average_total', 'display': 'Load Avg. Total', 'unit': ' '}
-                        ]
-                    })
+                dashboard = DeterDashboard()
+                units = [
+                    {'data_key': 'cpu_usage', 'display': 'CPU Usage', 'unit': ' '},
+                    {'data_key': 'cpu_jiffies', 'display': 'CPU Jiffies', 'unit': ' '},
+                    {'data_key': 'load_average_1', 'display': 'Load Avg. 1 Min', 'unit': ' '},
+                    {'data_key': 'load_average_5', 'display': 'Load Avg. 5 Min', 'unit': ' '},
+                    {'data_key': 'load_average_15', 'display': 'Load Avg. 15 Min', 'unit': ' '},
+                    {'data_key': 'load_average_total', 'display': 'Load Avg. Total', 'unit': ' '}
+                ]
+                dashboard.add_horizon_chart('Node Stats', self.name + '_' + 'node',
+                                            'host', units)
 
             log.info('runtime stats collection started')
             
