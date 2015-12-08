@@ -4,6 +4,8 @@ display: System Packet Counters
 description: uses system local features (packet filters, winpcap) to count packets passing through the node
 execute: thread 
 mainfile: pktCountersAgent.py
+software:
+    - libdeterdash
 variables:
     - name: filters
       help: the list of counters we should be keeping, only effective after startCollection

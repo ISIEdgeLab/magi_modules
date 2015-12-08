@@ -5,6 +5,7 @@ from magi.util import database
 from magi.util.agent import ReportingDispatchAgent, agentmethod
 from magi.util.processAgent import initializeProcessAgent
 from magi.util.software import requireSoftware
+from libdeterdash import DeterDashboard
 from pktcounters import IPTablesCounters, IPFWCounters, NPFCounters, Counters
 
 import logging
@@ -12,7 +13,9 @@ import sys
 
 log = logging.getLogger(__name__)
 
+
 class CounterRecorder(ReportingDispatchAgent):
+
     """ Class to read counter data via appropriate counter object and report it periodically """
 
     def __init__(self):
@@ -30,7 +33,7 @@ class CounterRecorder(ReportingDispatchAgent):
             self.counters = NPFCounters()
         else:
             self.counters = Counters()
-            
+
         self.populateIntf2Node()
         self.truncate = True
 
@@ -44,7 +47,7 @@ class CounterRecorder(ReportingDispatchAgent):
     def periodic(self, now):
         """ Actually read the counter data at this point in time """
         log.debug("Entering periodic()")
-        
+
         if not self.active:
             return int(now + 1) - now  # round off to next second
 
@@ -56,14 +59,15 @@ class CounterRecorder(ReportingDispatchAgent):
             self.clearCounters(None)
             log.debug("Setting default Counters")
             self.setDefaults(None)
-            
+
             log.debug("Fetched Counters")
             log.debug(data)
-            
+
             log.debug("Collecting sensed counters")
             tinBytes, tinPackets, toutBytes, toutPackets = 0, 0, 0, 0
             for (name, counters) in data.iteritems():
-                # Get the current counters, make sure their ints, create a new entry and store
+                # Get the current counters, make sure their ints, create a new
+                # entry and store
                 (pkts, bytes) = map(int, counters)
                 if name.startswith('in'):
                     tinBytes += bytes
@@ -71,33 +75,59 @@ class CounterRecorder(ReportingDispatchAgent):
                 elif name.startswith('out'):
                     toutBytes += bytes
                     toutPackets += pkts
-                
+
                 (trafficDirection, intfName) = name.split('-')
-                self.collection.insert({"intfName" : intfName, "peerNode" : self.intf2NodeMap[intfName], "trafficDirection": trafficDirection, "packets" : pkts, "bytes" : bytes})    
+                self.collection.insert(
+                    {"intfName": intfName,
+                     "peerNode": self.intf2NodeMap[intfName],
+                     "trafficDirection": trafficDirection,
+                     "packets": pkts,
+                     "bytes": bytes})
 
             if tinPackets:
-                self.collection.insert({"intfName" : "total", "trafficDirection": "in", "packets" : tinPackets, "bytes" : tinBytes})
+                self.collection.insert(
+                    {"intfName": "total",
+                     "trafficDirection": "in",
+                     "packets": tinPackets,
+                     "bytes": tinBytes})
 
             if toutPackets:
-                self.collection.insert({"intfName" : "total", "trafficDirection": "out", "packets" : toutPackets, "bytes" : toutBytes})
+                self.collection.insert(
+                    {"intfName": "total",
+                     "trafficDirection": "out",
+                     "packets": toutPackets,
+                     "bytes": toutBytes})
 
         except Exception:
             log.error("Problem reading counters", exc_info=1)
-            
+
         log.debug("Exiting periodic()")
         return int(now + self.interval) - now  # round off to next second
 
-    def sense(self, msg, peerNode, trafficDirection, thresholdLow, thresholdHigh):
+    def sense(
+        self,
+        msg,
+        peerNode,
+        trafficDirection,
+        thresholdLow,
+            thresholdHigh):
         """ Count packets going out of a given interface """
         log.info("Sensing data")
-        
+
         result = 0
         try:
-            itr = self.collection.find({'peerNode' : peerNode, 'trafficDirection' : trafficDirection }).sort('created', -1)
+            itr = self.collection.find(
+                {'peerNode': peerNode,
+                 'trafficDirection': trafficDirection}).sort('created',
+                                                             -1)
             rec = itr.next()
             bytes = rec['bytes']
-            log.info("Peer Node: %s, Traffic Direction: %s, Bytes: %d", peerNode, trafficDirection, bytes)
-            
+            log.info(
+                "Peer Node: %s, Traffic Direction: %s, Bytes: %d",
+                peerNode,
+                trafficDirection,
+                bytes)
+
             if bytes < thresholdLow:
                 result = -1
             elif bytes > thresholdHigh:
@@ -106,7 +136,7 @@ class CounterRecorder(ReportingDispatchAgent):
                 result = 0
         except Exception:
             log.error("Problem reading data", exc_info=1)
-                        
+
         log.info(result)
         return {'result': result}
 
@@ -118,7 +148,9 @@ class CounterRecorder(ReportingDispatchAgent):
             except:
                 # If the topology information is not available,
                 # as in the case of desktop mode
-                log.error("Peer node information could not be retrieved for %s" %(intf.name))
+                log.error(
+                    "Peer node information could not be retrieved for %s" %
+                    (intf.name))
                 peerNode = 'peerNode'
             self.intf2NodeMap[intf.name] = peerNode
 
@@ -126,26 +158,32 @@ class CounterRecorder(ReportingDispatchAgent):
         try:
             ip = testbed.getInterfaceInfo(matchname=intf).ip
         except Exception:
-            raise Exception("No information available for interface. Mostly invalid interface. Interface Name: %s" %(intf))
-        
+            raise Exception(
+                "No information available for interface. Mostly invalid interface. Interface Name: %s" %
+                (intf))
+
         topoGraph = testbed.getTopoGraph()
         src = testbed.getNodeName()
-        
+
         for link in topoGraph.node[src]['links'].values():
             if ip == link['ip']:
                 linkName = link['name']
                 break
-            
+
         if not linkName:
-            raise Exception("No information available for interface. Mostly invalid interface. Interface Name: %s" %(intf))
-        
-        neighbors = topoGraph.neighbors(src);
+            raise Exception(
+                "No information available for interface. Mostly invalid interface. Interface Name: %s" %
+                (intf))
+
+        neighbors = topoGraph.neighbors(src)
         neighbors.sort()
         for neighbor in neighbors:
             if linkName == topoGraph[src][neighbor]['linkName']:
                 return neighbor
-            
-        raise Exception("No information available for interface. Mostly invalid interface. Interface Name: %s" %(intf))
+
+        raise Exception(
+            "No information available for interface. Mostly invalid interface. Interface Name: %s" %
+            (intf))
 
     @agentmethod()
     def startCollection(self, msg):
@@ -158,48 +196,46 @@ class CounterRecorder(ReportingDispatchAgent):
             log.debug("truncating old records")
             self.collection.remove()
 
-        # setup visualiztion. 
+        # setup visualiztion.
         if self.visualize:
-            viz_table = database.getCollection('viz_data')
-            viz_table.insert({
-                'datatype': 'horizon_chart',
-                'display': 'Packet Count',
-                'table': self.name,
-                'node_key': 'host',
-                'units': [{'data_key': 'bytes',
-                           'display': 'Bytes',
-                           'unit': 'bytes/sec'},
-                          {'data_key': 'packets',
-                           'display': 'Packets',
-                           'unit': 'pkt/sec'}]
-            })
+            units = [
+                {'data_key': 'bytes', 'display': 'Bytes', 'unit': 'bytes/sec'},
+                {'data_key': 'packets', 'display': 'Packets', 'unit': 'pkt/sec'}
+            ]
+            dashboard = DeterDashboard()
+            if dashboard.add_horizon_chart('Packet Count', self.name, 'host', units):
+                log.info('Added packet countn data to Deter Dashboard GUI.')
+            else:
+                log.error('Error adding packet count data to the Deter Dashboard.')
 
         return True
 
     @agentmethod()
     def stopCollection(self, msg):
         self.active = False
-        #self.counters.clear()
+        # self.counters.clear()
         return True
 
     @agentmethod()
-    def setDefaults(self, msg):  
+    def setDefaults(self, msg):
         """ shortcut to add default counters similar to old 1.6 MAGI """
         for intf in testbed.getInterfaceList():
-            #self.addCounter(None, "in-"+intf.ip, {'input':intf.ip})
-            #self.addCounter(None, "out-"+intf.ip, {'output':intf.ip})
-            self.addCounter(None, "in-%s" %(intf.name), {'input':intf.name})
-            self.addCounter(None, "out-%s" %(intf.name), {'output':intf.name})
+            # self.addCounter(None, "in-"+intf.ip, {'input':intf.ip})
+            # self.addCounter(None, "out-"+intf.ip, {'output':intf.ip})
+            self.addCounter(None, "in-%s" % (intf.name), {'input': intf.name})
+            self.addCounter(
+                None, "out-%s" %
+                (intf.name), {'output': intf.name})
 
         return True
 
     # Old things to save
     @agentmethod()
-    def removeDefaults(self, msg):  
+    def removeDefaults(self, msg):
         """ shortcut to remove default counters added via addDefaults """
         for intf in testbed.getInterfaceList():
-            self.removeCounter(None, "in-%s" %(intf.ip))
-            self.removeCounter(None, "out-%s" %(intf.ip))
+            self.removeCounter(None, "in-%s" % (intf.ip))
+            self.removeCounter(None, "out-%s" % (intf.ip))
 
         return True
 
