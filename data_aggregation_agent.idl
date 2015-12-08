@@ -8,3 +8,4 @@ inherits:
    - ReportingDispatchAgent
 software:
    - python-pymongo
+   - libdeterdash

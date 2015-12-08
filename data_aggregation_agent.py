@@ -7,6 +7,7 @@ from magi.util.agent import ReportingDispatchAgent, agentmethod
 from magi.util.processAgent import initializeProcessAgent
 from magi.util import database
 from magi_db import MagiDatabase
+from libdeterdash import DeterDashboard
 
 log = logging.getLogger(__name__)
 
@@ -54,19 +55,12 @@ class DataAggregationAgent(ReportingDispatchAgent):
         # have to wastefully do this here as self.name is not set before this. Ugh.
         if not self._viz_configured:
             # tell the GUI we want to display this data.
+            dashboard = DeterDashboard()
+            units = [{'data_key': self.data_key,
+                      'display': 'Bytes',          # requires knowledge of the aggregated agent.
+                      'unit': 'bytes/sec'}]        # need to abstract this somehow...
+            dashboard.add_horizon_chart('Aggregated', self.name, 'enclave', units)
             self._viz_configured = True
-            viz_table = database.getCollection('viz_data')
-            viz_table.insert({
-                'datatype': 'horizon_chart',
-                'display': 'Aggregated {}'.format(self.name),
-                'table': self.name,
-                'node_key': 'enclave',
-                'units': [{'data_key': self.data_key,
-                           'display': 'Bytes',          # requires knowledge of the aggregated agent.
-                           'unit': 'bytes/sec'}]        # need to abstract this somehow...
-            })
-
-
 
         self._collection = database.getCollection(self.name)
 
