@@ -1,0 +1,10 @@
+name: iron
+magi_version: 1.7
+display: IRON 
+description: IRON solution for EdgeCT
+execute: thread 
+mainfile: iron_agent.py
+inherits:
+   - DispatchAgent
+software:
+   - iron 
