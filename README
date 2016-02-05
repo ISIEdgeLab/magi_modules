@@ -1,2 +1,9 @@
 Agent: IRON
 
+This agent installs and runs IRON. It required a staged IRON tarfile in /proj/edgect/groups/iron/tarfiles.
+The tarball name must be of the form "iron_$EXP.tgz" where $EXP is the name of the experiment the tarfile
+is meant to be installed and executed on. (It is per experiment as there is embedded topology/name information
+in the configuration files in the tarball.)
+
+
+
