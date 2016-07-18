@@ -39,6 +39,7 @@ class CounterRecorder(ReportingDispatchAgent):
 
         self.visualize = True  # if true, setup data for viz server.
 
+
 #    def stop(self, msg):
 #        """ Override agent loop so we can clear counters """
 #        self.counters.clear()
@@ -97,6 +98,13 @@ class CounterRecorder(ReportingDispatchAgent):
                      "trafficDirection": "out",
                      "packets": toutPackets,
                      "bytes": toutBytes})
+
+            # GTL - redundant data in easy to read format for the GUI.
+            self.totals_collection.insert({
+                'in_bytes': tinBytes,
+                'out_bytes': toutBytes,
+                'in_packets': tinPackets,
+                'out_packets': toutPackets})
 
         except Exception:
             log.error("Problem reading counters", exc_info=1)
@@ -189,22 +197,27 @@ class CounterRecorder(ReportingDispatchAgent):
     def startCollection(self, msg):
         self.setDefaults(None)
         self.collection = database.getCollection(self.name)
+        tcname = self.name + '_totals'
+        self.totals_collection = database.getCollection(tcname)
         for name, filtermap in self.filters.iteritems():
             self.counters.addDataCounter(name, **filtermap)
         self.active = True
         if self.truncate:
             log.debug("truncating old records")
             self.collection.remove()
+            self.totals_collection.remove()
 
         # setup visualiztion.
         if self.visualize:
             units = [
-                {'data_key': 'bytes', 'display': 'Bytes', 'unit': 'bytes/sec'},
-                {'data_key': 'packets', 'display': 'Packets', 'unit': 'pkt/sec'}
+                {'data_key': 'in_bytes', 'display': 'In Bytes', 'unit': 'bytes/sec'},
+                {'data_key': 'out_bytes', 'display': 'Out Bytes', 'unit': 'bytes/sec'},
+                {'data_key': 'in_packets', 'display': 'In Packets', 'unit': 'pkt/sec'},
+                {'data_key': 'out_packets', 'display': 'Out Packets', 'unit': 'pkt/sec'},
             ]
             dashboard = DeterDashboard()
-            if dashboard.add_horizon_chart('Packet Count', self.name, 'host', units):
-                log.info('Added packet countn data to Deter Dashboard GUI.')
+            if dashboard.add_horizon_chart('Packets/Bytes Count', tcname, 'host', units):
+                log.info('Added packet count data to Deter Dashboard GUI.')
             else:
                 log.error('Error adding packet count data to the Deter Dashboard.')
 
