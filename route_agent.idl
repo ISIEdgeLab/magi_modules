@@ -1,0 +1,19 @@
+name: Route Agent
+magi_version: 1.7
+display: Route Record
+description: An agent that collects routing information.
+execute: thread 
+mainfile: route_agent.py
+software:
+  - python-netaddr
+    python-netifaces
+inherits:
+  - ReportingDispatchAgent
+method: 
+  - name: startCollection
+    help: Start collecting routes from this node.
+    args: { }
+  - name: stopCollection
+    help: Stop collecting routes from this node.
+    args: { }
+
