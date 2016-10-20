@@ -76,8 +76,9 @@ class ClickGraph(object):
     def __init__(self, confdir='/click', conffile='/tmp/vrouter.click'):
         super(ClickGraph, self).__init__()
 
-        self._conffile = conffile               # The conf file that click was started with.
         self._confdir = confdir                 # The /click dir which contains live info.
+
+        # These classes define which nodes are routers and other types of nodes in teh click graph.
         self._router_class = 'RadixIPLookup'    # anything that has this class is a leaf in the graph.
         self._physical_class = 'ToDevice'       # anything of this class is a link to a NIC and a physical node.
         self._localhost_class = 'ToHost'        # anything of this class points to the localhost.
@@ -85,8 +86,8 @@ class ClickGraph(object):
         self._click_graph = nx.DiGraph(name='click')    # This is the "full" click graph built from /click.
         self._build_graph_from_filesystem()
 
-        self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node graph
-        self._build_router_graph_from_click_graph()
+        self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node subgraph.
+        self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
 
     def _build_router_graph_from_click_graph(self):
         for node in self._click_graph.nodes():
@@ -101,11 +102,16 @@ class ClickGraph(object):
                         cn.name = nbr['name']
                         cn.node_class = self._physical_class
                         self._router_graph.add_node(nbr['name'], data=cn)
-                    
+                   
+                    # add the edge between these neighbors, keeping track of the 
+                    # port over which they are connected. This is the port from 
+                    # node to nbr. (The graph is not symmetric.) 
                     self._router_graph.add_edge(node, nbr['name'], port=nbr['port'])
 
-
     def get_route_tables(self):
+        '''Return the current routing tables in the expected format which is 
+        a router name indexed dictionary of a dicts of dst, mask, gw, and iface, one
+        entry per route.'''
         tables = {}
         for n in self._router_graph.nodes():
             rt = self._router_graph.node[n]['data'].table
