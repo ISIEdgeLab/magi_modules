@@ -89,24 +89,10 @@ class ClickGraph(object):
         self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node subgraph.
         self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
 
-    def _build_router_graph_from_click_graph(self):
-        for node in self._click_graph.nodes():
-            data = self._click_graph.node[node]['data']
-            if data.node_class == self._router_class:
-                self._router_graph.add_node(node, data=data)
-                for nbr in self._get_router_nbrs(node):
-                    if nbr['name'] not in self._click_graph:
-                        # This is a physical node. Add it "by hand" as it's not a click node as click knows
-                        # nothing about it really.
-                        cn = ClickNode()
-                        cn.name = nbr['name']
-                        cn.node_class = self._physical_class
-                        self._router_graph.add_node(nbr['name'], data=cn)
-                   
-                    # add the edge between these neighbors, keeping track of the 
-                    # port over which they are connected. This is the port from 
-                    # node to nbr. (The graph is not symmetric.) 
-                    self._router_graph.add_edge(node, nbr['name'], port=nbr['port'])
+        self._known_hosts = None
+
+    def set_known_hosts(self, kh):
+        self._known_hosts = kh
 
     def get_route_tables(self):
         '''Return the current routing tables in the expected format which is 
@@ -130,7 +116,31 @@ class ClickGraph(object):
 
         return tables
 
-    def get_point2point(self, known_hosts):
+    def get_point2point(self, known_hosts=None):
+        '''
+            The return value is a dict of dicts indexed by the hostname for all hosts this node knows about.
+            In the case of a click router node, this will be an entry for each "router" node that exists
+            on the physcical node. For non-click nodes (physical or container), there will be on entry for the
+            node itself. 
+
+            The dict for each node will be a list of dicts point to point entries. The key/value pairs are:
+
+                dst, gw, iface, src, and next_hop
+
+            For click routers the iface is the click port prepended with "eth". Why? Don't know really.
+            
+            The gw entry may be empty. 
+            
+            The next_nop may be empty (currently) if the next hop is into a container pnode. i.e. this agent
+            does not understand pnode->containers routing. The agent does understand container->container and 
+            container->pnode routing though so all the bits are there, but asymmetric in certain cases.
+
+            If known_hosts is given, ClickGraph will use that list to find the dst point, else the
+            list set via ClickGraph.set_known_hosts() will be used.
+        '''
+        if not known_hosts:
+            known_hosts = self._known_hosts
+
         tables = defaultdict(list)
         for addr in known_hosts:
             for node in self._router_graph.nodes():
@@ -156,6 +166,36 @@ class ClickGraph(object):
                         break    # GTL - order is important. What order does click put the routes in?
 
         return dict(tables)
+
+    def get_neighbors(self):
+        '''Return a list of neighbor tuples this node knows about. Format [(host1, host2), ... ].'''
+        p2p = self.get_point2point()
+        nbrs = []
+        for node, entries in p2p.iteritems():
+            for entry in entries:
+                if entry['next_hop'] and (node, entry['next_hop']) not in nbrs:
+                    nbrs.append((node, entry['next_hop']))   # append the tuple. 
+
+        return nbrs
+
+    def _build_router_graph_from_click_graph(self):
+        for node in self._click_graph.nodes():
+            data = self._click_graph.node[node]['data']
+            if data.node_class == self._router_class:
+                self._router_graph.add_node(node, data=data)
+                for nbr in self._get_router_nbrs(node):
+                    if nbr['name'] not in self._click_graph:
+                        # This is a physical node. Add it "by hand" as it's not a click node as click knows
+                        # nothing about it really.
+                        cn = ClickNode()
+                        cn.name = nbr['name']
+                        cn.node_class = self._physical_class
+                        self._router_graph.add_node(nbr['name'], data=cn)
+                   
+                    # add the edge between these neighbors, keeping track of the 
+                    # port over which they are connected. This is the port from 
+                    # node to nbr. (The graph is not symmetric.) 
+                    self._router_graph.add_edge(node, nbr['name'], port=nbr['port'])
 
     def _findNeighbor(self, addr):
         '''

@@ -13,6 +13,7 @@ from route_data import RouteData, RouteDataException
 import logging
 import os
 import time
+import json
 
 log = logging.getLogger(__name__)
 
@@ -26,16 +27,20 @@ class RouteReportAgent(ReportingDispatchAgent):
         # User configurable. 
         self.interval = 5
         self.truncate = True
-        self.recordLimit = 0    # If True, only keep the newest data in the database. 
+        self.recordLimit = 0            # If True, only keep the newest data in the database. 
+        self.active_topology = False    # If True, update the topology as routes shift.
+                                        # If False, update once during first periodic call.
 
         # do not change these. 
         self.active = False
         self.collection = {}
+        self._update_topo = True
 
         # Do we want to expose this API to let people modify "control nets"?
         self._routeData = RouteData()
 
     def periodic(self, now):
+        '''Update the database with the newest routes found on the node.'''
         if self.active:
             log.info("running periodic")
 
@@ -49,15 +54,18 @@ class RouteReportAgent(ReportingDispatchAgent):
 
                 if tables:
                     log.info('found {} routes for {} host'.format(collection, len(tables.keys())))
-                    for host, entry in tables.iteritems():
-                        for route in entry:
-                            route['router'] = host      # this is needed as there are "hosts" that 
-                                                        # only exist in Click's imagination. Magi sees
-                                                        # "vrouter", click and the GUI see "router1" and
-                                                        # "router2", etc. 
-                            log.debug('Inserting {} route: {}'.format(collection, route))
-                            self.collection[collection].insert(route)
+                    for host, routes in tables.iteritems():
+                        log.debug('Inserting {} routes: {}'.format(collection, routes))
+                        # Need to specify 'router' as 'host' may be a "fake" click router node.
+                        self.collection.insert({
+                            'router': host,
+                            'routes': routes,
+                            'table_type': collection
+                        })
 
+            # handle updates to topology
+            self._update_topology()
+            
         ret = now + int(self.interval) - time.time()
         return ret if ret > 0 else 0
 
@@ -65,14 +73,13 @@ class RouteReportAgent(ReportingDispatchAgent):
     def startCollection(self, msg):
         if not self.active:
             for table_type in ['routes', 'point2point']:
-                log.info('Getting collection: {}'.format(self.name + '_' + table_type))
-                self.collection[table_type] = database.getCollection(self.name + '_' + table_type)
+                log.info('Getting collection: {}'.format(self.name))
+                self.collection = database.getCollection(self.name)
 
             if self.truncate:
                 log.debug('truncating old records')
-                for c in self.collection.values():
-                    log.info('Truncating collection: {}'.format(c))
-                    c.remove()
+                log.info('Truncating routing data in database.')
+                self.collection.remove()
 
             log.info('route recording started')
             self.active = True
@@ -92,6 +99,7 @@ class RouteReportAgent(ReportingDispatchAgent):
         # return True so that any defined trigger gets sent back to the orchestrator
         return True
 
+    @agentmethod()
     def confirmConfiguration(self):
         try:
             self.interval = int(self.interval)
@@ -101,6 +109,42 @@ class RouteReportAgent(ReportingDispatchAgent):
 
         return True
 
+    def _update_topology(self):
+        '''Click only. Replace 'vrouter' machine with click network in system topology.'''
+        if self._update_topo:
+            self._update_topo = self.active_topology
+
+            topo_updates = self._routeData.get_topology_updates()
+            if topo_updates:
+                col =  database.getCollection('topo_agent')
+                cursor = col.find()
+                if cursor:
+                    topo = cursor[0]
+                    nodes = json.loads(topo['nodes'])  # nodes are kept as json list in db?!?
+                    edges = json.loads(topo['edges'])  # ?!?! edges are list of 2 items lists.
+
+                    # update topo_agent entry to include our updates.
+                    for node in topo_updates['remove']:
+                        # remove all entries for 'node'
+                        nodes = [n for n in nodes if n != node]
+                        edges = [e for e in edges if node not in e]
+
+                    for node_a, node_b in topo_updates['add']:
+                        # add new edge entry
+                        if node_a not in nodes:
+                            nodes.append(node_a)
+
+                        if node_b not in nodes:
+                            nodes.append(node_b)
+
+                        if [node_a, node_b] not in edges:
+                            edges.append([node_a, node_b])
+
+                col.insert(
+                    {'nodes': json.dumps(nodes),
+                     'edges': json.dumps(edges)})   # I'm sure there's a reason this is json encoded?
+            
+
 def getAgent(**kwargs):
     agent = RouteReportAgent()
     agent.setConfiguration(None, **kwargs)
@@ -109,12 +153,13 @@ def getAgent(**kwargs):
 if __name__ == "__main__":
     from sys import argv 
 
-    debug = False
-    logging.basicConfig(level=logging.INFO)
+    debug = True if '-d' in argv else False
+    log_level = logging.DEBUG if '-v' in argv else logging.INFO
+
+    logging.basicConfig(level=log_level)
     agent = RouteReportAgent()
+
     if debug:
-        logging.basicConfig(level=logging.DEBUG)
-        agent.active = True
         agent.periodic(time.time())
         exit(0)
 

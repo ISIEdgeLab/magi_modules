@@ -28,6 +28,9 @@ class RouteData(object):
         self._clickGraph = None if not isClickNode() else ClickGraph()
         self._known_hosts = self._get_known_hosts()
 
+        if self._clickGraph:
+            self._clickGraph.set_known_hosts(self._known_hosts)
+
     def get_route_tables(self):
         '''Return all route tables this node knows about. For physical nodes, this is one table. For Click
         nodes this will be all the click router tables on this node. Return format is a dict:
@@ -58,9 +61,22 @@ class RouteData(object):
 
     def get_point2point(self):
         if self._clickGraph:
-            return self._clickGraph.get_point2point(self._known_hosts)
+            return self._clickGraph.get_point2point()
 
         return self._get_p2p_std()
+
+    def get_topology_updates(self):
+        if self._clickGraph:
+            p2p = self._clickGraph.get_point2point()
+            updates = defaultdict(list)
+            updates['remove'].append(testbed.nodename)
+            for host, entries in p2p.iteritems():
+                for entry in entries:
+                    if entry['next_hop'] and (host, entry['next_hop']) not in updates['add']:
+                        updates['add'].append((host, entry['next_hop']))
+
+            return updates
+
 
     def _is_datanet(self, addr):
         if addr.is_multicast() or addr.is_loopback():
@@ -82,7 +98,8 @@ class RouteData(object):
             #   10.1.1.0        0.0.0.0         255.255.255.0   U         0 0          0 eth5
             #   192.168.0.0     0.0.0.0         255.255.252.0   U         0 0          0 eth0 
             for line in sout.split('\n'):
-                m = re.search('^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+.+\s+(\w+)$', line)
+                m = re.search('^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.'
+                              '\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+.+\s+(\w+)$', line)
                 if m:
                     dst, gw, netmask, iface = m.group(1, 2, 3, 4)
                     if not self._is_datanet(IPNetwork(dst, netmask)):
@@ -182,5 +199,7 @@ if __name__ == "__main__":
     pprint.pprint(rd.get_route_tables())
     print('point to point tables:')
     pprint.pprint(rd.get_point2point())
+    print('topo updates:')
+    pprint.pprint(rd.get_topology_updates())
 
     exit(0)
