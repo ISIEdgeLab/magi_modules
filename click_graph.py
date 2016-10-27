@@ -21,10 +21,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-def isClickNode():
-    p = os.path.join('/', 'click')   # support for Click on Windows!!!
-    return os.path.exists(p) and os.path.isdir(p)
-
 class ClickGraphException(Exception):
     pass
 
@@ -61,8 +57,7 @@ class ClickNode(object):
                 net, gw, port = tokens
                 gw = IPAddress(gw) if gw != '-' else None
                 net = IPNetwork(net)
-                # port is unique to click router. iface is for pnodes. In C, this would be a union.
-                self.table.append({'dst': net, 'gw': gw, 'port': int(port)})
+                self.table.append({'dst': net, 'gw': gw, 'port': port, 'link': '{}-{}'.format(self.name, port)})
 
     def __repr__(self):
         return '{}/{}'.format(self.name, self.node_class)
@@ -73,7 +68,7 @@ class ClickGraph(object):
     Represent the topology graph and various bits. Read the live /click dir for initial graph configuration and
     live updates. 
     """
-    def __init__(self, confdir='/click', conffile='/tmp/vrouter.click'):
+    def __init__(self, confdir='/click'):
         super(ClickGraph, self).__init__()
 
         self._confdir = confdir                 # The /click dir which contains live info.
@@ -109,7 +104,7 @@ class ClickGraph(object):
                         'dst': str(route['dst']),
                         'netmask': str(route['dst'].netmask),
                         'gw': gwaddr,
-                        'iface': 'eth{}'.format(route['port']),         # no iface for a click router.
+                        'iface': route['link']
                     })
 
                 tables[n] = routes
@@ -125,11 +120,9 @@ class ClickGraph(object):
 
             The dict for each node will be a list of dicts point to point entries. The key/value pairs are:
 
-                dst, gw, iface, src, and next_hop
+                dst, iface, src, and next_hop
 
-            For click routers the iface is the click port prepended with "eth". Why? Don't know really.
-            
-            The gw entry may be empty. 
+            For click routers the iface is the click port prepended with node name. Need to call it something.
             
             The next_nop may be empty (currently) if the next hop is into a container pnode. i.e. this agent
             does not understand pnode->containers routing. The agent does understand container->container and 
@@ -147,19 +140,19 @@ class ClickGraph(object):
                 route_table = self._router_graph.node[node]['data'].table
                 for route in route_table:
                     if addr in route['dst']:   # is this address on this route?
-                        gw = str(route['gw']) if route['gw'] else None
-
-                        # get the next hop name by looking through the edges and matching the out port of the edge.
                         next_hop = None
                         for nbr, edge_data in self._router_graph[node].iteritems():
-                            if edge_data['port'] == route['port']:
-                                next_hop = nbr
+                            if edge_data['to'] == route['link']:
+                                next_hop = edge_data['to']
                                 break
-                                
+
+                        # p2p table uses link names. (hostnames which ID a link/iface.)
+                        next_hop = self._router_graph[node][nbr]['frm']
+                        dst = socket.gethostbyaddr(str(addr))[0]
                         tables[node].append({
-                            'dst': str(addr),
-                            'gw': gw,
-                            'iface': 'eth{}'.format(route['port']),   # GTL - what else to put here really?
+                            'dst': dst,
+                            'dst_addr': str(addr),
+                            'iface': route['link'], 
                             'src': node,
                             'next_hop': next_hop})
 
@@ -183,6 +176,7 @@ class ClickGraph(object):
             data = self._click_graph.node[node]['data']
             if data.node_class == self._router_class:
                 self._router_graph.add_node(node, data=data)
+                log.debug('added router node: {}'.format(node))
                 for nbr in self._get_router_nbrs(node):
                     if nbr['name'] not in self._click_graph:
                         # This is a physical node. Add it "by hand" as it's not a click node as click knows
@@ -191,42 +185,38 @@ class ClickGraph(object):
                         cn.name = nbr['name']
                         cn.node_class = self._physical_class
                         self._router_graph.add_node(nbr['name'], data=cn)
+                        log.debug('added phy node: {}'.format(nbr['name']))
                    
                     # add the edge between these neighbors, keeping track of the 
                     # port over which they are connected. This is the port from 
                     # node to nbr. (The graph is not symmetric.) 
-                    self._router_graph.add_edge(node, nbr['name'], port=nbr['port'])
+                    log.debug('added edge: {} --> {}'.format(node, nbr['name']))
+                    self._router_graph.add_edge(node, nbr['name'], frm=nbr['frm'], to=nbr['to'])
 
-    def _findNeighbor(self, addr):
+    def _findNeighbor(self, ifaddr, mask):
         '''
         Map IP addresses to neighbors (based on /etc/hosts)
         '''
-        hosts = open('/etc/hosts', "r")
-        nmask = self.dottedQuadToLong("255.255.255.0")
-        net = nmask & self.dottedQuadToLong(addr)
-        for host in hosts:
-            tokens = host.strip("\n").split()
-            if len(tokens) > 1:
-                if(tokens[0] != addr):
-                    v = (self.dottedQuadToLong(tokens[0]) & nmask) == net
-                    if v:
-                        if len(tokens) > 3:
-                            return tokens[-1]
-                        else:
-                            k = tokens[-1].rfind("-")
-                            return tokens[-1][:k]
+        with open(os.path.join('/', 'etc', 'hosts')) as hosts:
+            net = IPNetwork('{}/{}'.format(ifaddr, mask))
+            for host in hosts:
+                tokens = host.strip("\n").split()
+                if len(tokens) > 1:
+                    if(tokens[0] != str(ifaddr)):
+                        nbr_addr = IPAddress(tokens[0])
+                        if nbr_addr in net:
+                            names = socket.gethostbyaddr(str(nbr_addr))
+                            return names[1][-1], names[0]   # GTL very DETER specific. Last alias is "real name". 
         return None
 
     def _mapInterfaceToNeighbor(self, iface):
         '''
-        Map Interface names to Neighbors
+        Map Interface names to Neighbors. Return hostname, linkname tuple of neighbor given an ip address. 
         '''
         addrs = ni.ifaddresses(iface)
         addr = addrs[ni.AF_INET][0]['addr']
-        return self._findNeighbor(addr)
-    
-    def dottedQuadToLong(self, ip):
-        return struct.unpack('I',socket.inet_aton(ip))[0]
+        mask = addrs[ni.AF_INET][0]['netmask']
+        return self._findNeighbor(addr, mask)
 
     def _build_graph_from_filesystem(self):
         ''' Parse the /click directory to build the unconnected nodes.'''
@@ -240,6 +230,7 @@ class ClickGraph(object):
         dirs = [d for d in dirs if not d.startswith('.')]   # filter the . dirs that click uses.
         for d in dirs:
             n = ClickNode()
+            # name *must* come before talble as the name of the node is used in the link in the table!
             for f in ['class', 'name', 'table', 'config']:
                 path = os.path.join(self._confdir, d, f)
                 if not os.path.isfile(path):
@@ -292,7 +283,7 @@ class ClickGraph(object):
 
         return True   # sure, why not?
 
-    def _find_classes_in_subtree(self, node, nbr, classes):
+    def _find_classes_in_subtree(self, node, nbr, prev_nbr, classes):
         '''
         Given a nbr of a node, follow the nodes links until you hit a node with that class
         is in the given class list. The idea here is to trace the edges until we find a router or
@@ -301,33 +292,41 @@ class ClickGraph(object):
         NOTE: this only works when the nbr links directly to another node with the given classes
         via a single chain of unidirectional links. You can make click graphs that do not have
         this property. When you do, this function will break.
+
+        Return value is a (node name, edge) tuple of the found classes.
         '''
         if nbr == node:
-            return [None] # looped back to orig node. Ignore.
+            return [(None, None)] # looped back to orig node. Ignore.
 
         node_data = self._click_graph.node[nbr]['data']
         if node_data.node_class in classes:
-            return [nbr]    # found one, return it and ignore subgraph below this node.
+            # found one, return it and ignore subgraph below this node.
+            return [(nbr, self._click_graph[prev_nbr][nbr])]
 
         next_nbrs = self._click_graph.successors(nbr)
         if not next_nbrs:
-            return [None]    # dead end. toh or something.
+            return [(None, None)]    # dead end. toh or something.
 
         therest = []
         for next_nbr in next_nbrs:
-            therest += self._find_classes_in_subtree(node, next_nbr, classes)
+            therest += self._find_classes_in_subtree(node, next_nbr, nbr, classes)
 
         return therest
 
 
     def _get_router_nbrs(self, node):
-        '''return a list of routers that this node is connected to via a chain of edges.'''
+        '''
+        get a list of routers that this node is connected to via a chain of edges.
+        return value is name of router nbr, click graph edge of router nbr, click graph 
+        edge of node that leads to nbr. (where edge is a graph edge object.)
+        '''
+
         router_nbrs = []
         classes = [self._router_class, self._physical_class]
         for nbr in self._click_graph.neighbors(node):
-            subtree_nodes = self._find_classes_in_subtree(node, nbr, classes)
+            subtree_nodes = self._find_classes_in_subtree(node, nbr, node, classes)
             # remove dead ends (which will be None)
-            found_node = [n for n in subtree_nodes if n]
+            found_node = [n for n in subtree_nodes if n[0]]
             if found_node:    # did not find a dead end.
                 # Only one path should lead to a class we want.
                 if len(found_node) != 1:
@@ -335,11 +334,15 @@ class ClickGraph(object):
                     log.critical(msg)
                     raise ClickGraphException(msg)
 
-                n = found_node[0]
+                n, e = found_node[0]
                 if self._click_graph.node[n]['data'].node_class == self._physical_class:
-                    n = self._mapInterfaceToNeighbor(self._click_graph.node[n]['data'].config[0])
+                    name, frm = self._mapInterfaceToNeighbor(self._click_graph.node[n]['data'].config[0])
+                else:
+                    name = n
+                    frm = '{}-{}'.format(name, e['port'])   # recreate the link name. 
 
-                router_nbrs.append({'name': n, 'port': self._click_graph[node][nbr]['port']})
+                to = '{}-{}'.format(node, self._click_graph[node][nbr]['port'])
+                router_nbrs.append({'name': name, 'frm': frm, 'to': to})
 
         return router_nbrs
 
@@ -376,11 +379,12 @@ if __name__ == "__main__":
         if node:
             if tohosts:
                 for table in rtables[node]:
-                    print('{} --> {} via {} ({})'.format(
+                    print('{} --> {} ({}) via link {}/{}'.format(
                         table['src'],
                         table['dst'],
-                        table['nbr'],
-                        table['iface']))
+                        table['dst_addr'],
+                        table['iface'],
+                        table['next_hop']))
 
             else:
                 print('{} routing table: {}'.format(node, rtables[node]))
@@ -393,8 +397,7 @@ if __name__ == "__main__":
         print('-' * 80)
         r_nbrs = g._get_router_nbrs(r)
         for nbr in r_nbrs:
-            print('{} connected to {} via port {} ("eth{}")'.format(
-                r, nbr['name'], nbr['port'], nbr['port']))
+            print('{} connected to {} via link {}/{}'.format(r, nbr['name'], nbr['to'], nbr['frm']))
 
     cg = ClickGraph()
     print(cg)

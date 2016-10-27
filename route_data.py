@@ -4,13 +4,13 @@ import logging
 import re
 import socket
 from collections import defaultdict
-from os.path import join as path_join
+from os import path
 from netaddr import IPNetwork, IPAddress
 from netaddr.core import AddrFormatError
 
 from magi.testbed import testbed
 from magi.util.execl import execAndRead
-from click_graph import ClickGraph, isClickNode, ClickGraphException
+from click_graph import ClickGraph, ClickGraphException
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class RouteData(object):
             IPNetwork('192.168.0.0', '255.255.0.0'),
             IPNetwork('172.16.0.0', '255.240.0.0')
         ]
-        self._clickGraph = None if not isClickNode() else ClickGraph()
+        self._clickGraph = None if not 'click' in self.get_node_types() else ClickGraph()
         self._known_hosts = self._get_known_hosts()
 
         if self._clickGraph:
@@ -77,6 +77,21 @@ class RouteData(object):
 
             return updates
 
+    def get_node_types(self):
+        '''Return the type(s) of node this is as a list.'''
+        ret_val = []
+        p = path.join('/', 'click')   # support for Click on Windows!!!
+        if path.exists(p) and path.isdir(p):
+            ret_val.append('click')
+
+        p = path.join('/', 'var', 'containers')
+        if path.exists(p) and path.isdir(p):
+            ret_val.append('container')
+
+        if not 'container' in ret_val:
+            ret_val.append('physical')    # Hmm. 
+
+        return ret_val
 
     def _is_datanet(self, addr):
         if addr.is_multicast() or addr.is_loopback():
@@ -115,7 +130,7 @@ class RouteData(object):
     def _get_known_hosts(self):
         lines = []
         hosts = []
-        with open(path_join('/', 'etc', 'hosts')) as fd:
+        with open(path.join('/', 'etc', 'hosts')) as fd:
             lines = [l.strip() for l in fd.readlines()]
 
         if not lines:
@@ -145,7 +160,7 @@ class RouteData(object):
         # this is a single node, so there is only one entry in the table.
         routes = []
         for addr in self._known_hosts:
-            cmd = 'ip route get {}'.format(addr)
+            cmd = 'ip -r route get {}'.format(addr)
             cmdout, cmderr = execAndRead(cmd)
 
             if not cmdout:
@@ -164,26 +179,21 @@ class RouteData(object):
             if 'via' in cmdout:
                 route = cmdout.split()
                 if len(route) == 9:
-                    dst, _, gw, _, dev, _, src, _, _ = route
+                    dst, _, next_hop, _, dev, _, src, _, _ = route
                 else:
-                    dst, _, gw, _, dev, _, src = route  # no realm specified.
+                    dst, _, next_hop, _, dev, _, src = route  # no realm specified.
             else:
                 if cmdout.startswith('local'):
                     _, dst, _, dev, _, src, = cmdout.split()
                 else:
                     dst, _, dev, _, src, = cmdout.split()
-                gw = None
-
-            if gw:
-                alias = socket.gethostbyaddr(gw)[1][-1]
-                next_hop = alias.split('-')[0]    # GTL Very DETER specific. Strip -* from hostname. 
-            else:
                 next_hop = None
 
-            log.debug('route found: {} --> {} via {} ({})'.format(src, dst, gw, next_hop))
-            routes.append({'dst': dst, 'gw': gw, 'iface': dev, 'src': src, 'next_hop': next_hop})
+            log.debug('route found: {} --> {} via {}'.format(src, dst, next_hop))
+            routes.append({'dst': dst, 'iface': dev, 'src': src, 'next_hop': next_hop})
 
         return {testbed.nodename: routes}
+
 
 if __name__ == "__main__":
     from sys import argv

@@ -10,6 +10,8 @@ from magi.util.agent import agentmethod, ReportingDispatchAgent
 from magi.util.processAgent import initializeProcessAgent
 from route_data import RouteData, RouteDataException
 
+from libdeterdash import DeterDashboard
+
 import logging
 import os
 import time
@@ -33,8 +35,9 @@ class RouteReportAgent(ReportingDispatchAgent):
 
         # do not change these. 
         self.active = False
-        self.collection = {}
+        self._collection = {}
         self._update_topo = True
+        self._viz_configured = False
 
         # Do we want to expose this API to let people modify "control nets"?
         self._routeData = RouteData()
@@ -57,7 +60,7 @@ class RouteReportAgent(ReportingDispatchAgent):
                     for host, routes in tables.iteritems():
                         log.debug('Inserting {} routes: {}'.format(collection, routes))
                         # Need to specify 'router' as 'host' may be a "fake" click router node.
-                        self.collection.insert({
+                        self._collection.insert({
                             'router': host,
                             'routes': routes,
                             'table_type': collection
@@ -74,12 +77,15 @@ class RouteReportAgent(ReportingDispatchAgent):
         if not self.active:
             for table_type in ['routes', 'point2point']:
                 log.info('Getting collection: {}'.format(self.name))
-                self.collection = database.getCollection(self.name)
+                self._collection = database.getCollection(self.name)
 
             if self.truncate:
                 log.debug('truncating old records')
                 log.info('Truncating routing data in database.')
-                self.collection.remove()
+                self._collection.remove()
+
+            # record the type(s) of node this is. 
+            self._collection.insert({'name': testbed.nodename, 'types': self._routeData.get_node_types()})
 
             log.info('route recording started')
             self.active = True
@@ -87,6 +93,15 @@ class RouteReportAgent(ReportingDispatchAgent):
         else:
             log.warning('start collection requested, but collection is already active')
             
+        # have to wastefully do this here as self.name is not set before this. Ugh.
+        if not self._viz_configured:
+            # tell the GUI we want to display this data using a (node and edges) graph.
+            dashboard = DeterDashboard()
+            # these, ugh, hard coded values can be found in self._update_topology. 
+            # We add the extra_keys so the viz engine can find our nodes and edges.
+            dashboard.add_topology('Routing', self.name, 'nodes', 'edges', extra_keys={'table_type': 'topology'})
+            self._viz_configured = True
+
         # return True so that any defined trigger gets sent back to the orchestrator
         return True
 
@@ -123,7 +138,7 @@ class RouteReportAgent(ReportingDispatchAgent):
                     nodes = json.loads(topo['nodes'])  # nodes are kept as json list in db?!?
                     edges = json.loads(topo['edges'])  # ?!?! edges are list of 2 items lists.
 
-                    # update topo_agent entry to include our updates.
+                    # add/remove our updates to/from the topo_agent entries. 
                     for node in topo_updates['remove']:
                         # remove all entries for 'node'
                         nodes = [n for n in nodes if n != node]
@@ -140,10 +155,11 @@ class RouteReportAgent(ReportingDispatchAgent):
                         if [node_a, node_b] not in edges:
                             edges.append([node_a, node_b])
 
-                col.insert(
-                    {'nodes': json.dumps(nodes),
-                     'edges': json.dumps(edges)})   # I'm sure there's a reason this is json encoded?
-            
+                self._collection.insert({
+                    'table_type': 'topology',
+                    'nodes': nodes,
+                    'edges': edges})   
+
 
 def getAgent(**kwargs):
     agent = RouteReportAgent()
