@@ -6,7 +6,8 @@ execute: thread
 mainfile: route_agent.py
 software:
   - python-netaddr
-    python-netifaces
+  - python-netifaces
+  - libdeterdash
 inherits:
   - ReportingDispatchAgent
 method: 
