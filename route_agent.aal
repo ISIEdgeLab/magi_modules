@@ -1,10 +1,10 @@
 streamstarts: [ main ]
 
 groups:
-  route_nodes: [server1, server2, server3, vrouter, ct3, crypto2, crypto3, ct1, control, ct2, crypto1]
+  route_nodes: [crypto1, crypto2, crypto3, ct1, ct2, ct3, server1, server2, server3, traf11, traf12, traf13, traf14, traf15, traf16, traf17, traf18, traf21, traf22, traf23, traf24, traf25, traf26, traf27, traf28, traf31, traf32, traf33, traf34, traf35, traf36, traf37, traf38, vrouter]
 
 agents:
-  routes:
+  routes_agent:
     group: route_nodes
     path: /users/glawler/src/edgect/magi/agents/route_agent
     execargs:
@@ -15,7 +15,7 @@ agents:
 eventstreams:
   main: 
   - type: event
-    agent: routes
+    agent: routes_agent
     method: startCollection
     args: {}
 
@@ -23,7 +23,7 @@ eventstreams:
     triggers: [{timeout: 60000}]
 
   - type: event
-    agent: routes
+    agent: routes_agent
     method: stopCollection
     args: {}
 
