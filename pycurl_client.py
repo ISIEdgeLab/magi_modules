@@ -168,8 +168,9 @@ class PyCurlAgent(TrafficClientAgent):
             c.close()
             return
 
-        if c.getinfo(c.RESPONSE_CODE) != '200':
-            log.error('Error with pycurl connection. Got response code: {}'.format(
+        if c.getinfo(c.RESPONSE_CODE) != 200:
+            log.error('Error with pycurl connection. Got response info/code: {} {}'.format(
+                c.getinfo(c.RESPONSE_CODE),
                 c.RESPONSE_CODE))
 
         if self._collection:
