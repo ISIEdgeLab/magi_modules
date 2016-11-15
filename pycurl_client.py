@@ -12,6 +12,7 @@ import logging
 import random
 import sys
 
+from magi.util.distributions import *
 from magi.util.agent import TrafficClientAgent
 from magi.util.processAgent import initializeProcessAgent
 from magi.util import database
@@ -141,7 +142,7 @@ class PyCurlAgent(TrafficClientAgent):
 
         dst = self.servers[random.randint(0, len(self.servers) - 1)]
         c = pycurl.Curl()
-        url = self._url.format(dst, eval(self.sizes))
+        url = self._url.format(dst, int(eval(self.sizes)))
         log.info('curl url: {}'.format(url))
         c.setopt(c.URL, url)
         c.setopt(c.NOPROGRESS, 0)
@@ -177,11 +178,11 @@ class PyCurlAgent(TrafficClientAgent):
         c.close()
 
     def increaseTraffic(self, msg, stepsize):
-        self.sizes = eval(self.sizes) + stepsize
+        self.sizes = int(eval(self.sizes)) + stepsize
         self.sizes = str(self.sizes)
 
     def reduceTraffic(self, msg, stepsize):
-        self.sizes = eval(self.sizes) - stepsize
+        self.sizes = int(eval(self.sizes)) - stepsize
         if(self.sizes < 0):
             self.sizes = 0
         self.sizes = str(self.sizes)
@@ -189,9 +190,9 @@ class PyCurlAgent(TrafficClientAgent):
     def changeTraffic(self, msg, stepsize):
         prob = random.randint(0, 100)
         if prob in range(10):
-            self.sizes = eval(self.sizes) + int(stepsize * random.random())
+            self.sizes = int(eval(self.sizes)) + int(stepsize * random.random())
         elif prob in range(10, 20):
-            self.sizes = eval(self.sizes) - int(stepsize * random.random())
+            self.sizes = int(eval(self.sizes)) - int(stepsize * random.random())
             if(self.sizes < 0):
                 self.sizes = 0
         self.sizes = str(self.sizes)
