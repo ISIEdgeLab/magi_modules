@@ -67,15 +67,11 @@ class RouteData(object):
 
     def get_topology_updates(self):
         if self._clickGraph:
-            p2p = self._clickGraph.get_point2point()
             updates = defaultdict(list)
-            updates['remove'].append(testbed.nodename)
-            for host, entries in p2p.iteritems():
-                for entry in entries:
-                    if entry['next_hop'] and (host, entry['next_hop']) not in updates['add']:
-                        updates['add'].append((host, entry['next_hop']))
+            updates['remove'].append(testbed.nodename)  # node name should be from returned data.
+            updates['add'] = self._clickGraph.get_click_topology()
 
-            return updates
+            return dict(updates)
 
     def get_node_types(self):
         '''Return the type(s) of node this is as a list.'''
@@ -160,7 +156,7 @@ class RouteData(object):
         # this is a single node, so there is only one entry in the table.
         routes = []
         for addr in self._known_hosts:
-            cmd = 'ip -r route get {}'.format(addr)
+            cmd = 'ip route get {}'.format(addr)
             cmdout, cmderr = execAndRead(cmd)
 
             if not cmdout:
@@ -179,22 +175,58 @@ class RouteData(object):
             if 'via' in cmdout:
                 route = cmdout.split()
                 if len(route) == 9:
-                    dst, _, next_hop, _, dev, _, src, _, _ = route
+                    dst_addr, _, next_hop_addr, _, dev, _, src_addr, _, _ = route
                 else:
-                    dst, _, next_hop, _, dev, _, src = route  # no realm specified.
+                    dst_addr, _, next_hop_addr, _, dev, _, src_addr = route  # no realm specified.
             else:
                 if cmdout.startswith('local'):
-                    _, dst, _, dev, _, src, = cmdout.split()
+                    _, dst_addr, _, dev, _, src_addr, = cmdout.split()
                 else:
-                    dst, _, dev, _, src, = cmdout.split()
-                next_hop = None
+                    dst_addr, _, dev, _, src_addr, = cmdout.split()
+                next_hop_addr = dst_addr    # same subnet, so next hop is direct to dst.
 
-            log.debug('route found: {} --> {} via {}'.format(src, dst, next_hop))
-            routes.append({'dst': dst, 'iface': dev, 'src': src, 'next_hop': next_hop})
+            dst_aliases = socket.gethostbyaddr(dst_addr)
+            dst_link = dst_aliases[0]
+            dst_name = dst_aliases[1][-1]   # GTL very DETER specific. VERY.
+            dst_name = dst_name if '-' not in dst_name else dst_name.split('-')[0]
+
+            src_aliases = socket.gethostbyaddr(src_addr)
+            src_link = src_aliases[0]
+            src_name = src_aliases[1][-1]   # GTL very DETER specific. VERY.
+            src_name = src_name if '-' not in src_name else src_name.split('-')[0]
+
+            if next_hop_addr:
+                nh_aliases = socket.gethostbyaddr(next_hop_addr)
+                nh_link = nh_aliases[0]
+                nh_name = nh_aliases[1][-1]   # GTL very DETER specific. VERY.
+                nh_name = nh_name if '-' not in nh_name else nh_name.split('-')[0]
+            else:
+                nh_name = None
+                nh_link = None
+
+            log.debug('p2p route found: {}/{}/{} --> {}/{}/{}'.format(
+                src_addr, src_name, src_link, dst_addr, dst_name, dst_link))
+            routes.append({
+                'next_hop_addr': next_hop_addr,
+                'next_hop_link': nh_link,
+                'next_hop_name': nh_name,
+                'dst_addr': dst_addr,       # dst addr
+                'dst_name': dst_name,       # canonical DETER host name, aka the node name.
+                'dst_link': dst_link,       # The DETER name for the address on that interface.
+                'src_addr': src_addr, 
+                'src_name': src_name,
+                'src_link': src_link,
+                'src_iface': dev,
+            })
 
         return {testbed.nodename: routes}
 
+    def get_network_edges(self):
+        if self._clickGraph:
+            return self._clickGraph.get_network_edge_map()
 
+        return None
+        
 if __name__ == "__main__":
     from sys import argv
     import pprint
@@ -211,5 +243,7 @@ if __name__ == "__main__":
     pprint.pprint(rd.get_point2point())
     print('topo updates:')
     pprint.pprint(rd.get_topology_updates())
+    print('network edge map')
+    pprint.pprint(rd.get_network_edges())
 
     exit(0)

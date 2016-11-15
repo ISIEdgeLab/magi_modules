@@ -56,6 +56,7 @@ class RouteReportAgent(ReportingDispatchAgent):
                     log.error('Error getting {} tables: {}'.format(collection, e))
 
                 if tables:
+
                     log.info('found {} routes for {} host'.format(collection, len(tables.keys())))
                     for host, routes in tables.iteritems():
                         log.debug('Inserting {} routes: {}'.format(collection, routes))
@@ -66,8 +67,9 @@ class RouteReportAgent(ReportingDispatchAgent):
                             'table_type': collection
                         })
 
-            # handle updates to topology
+            # handle updates to topology and network edges.
             self._update_topology()
+            self._update_network_edges()
             
         ret = now + int(self.interval) - time.time()
         return ret if ret > 0 else 0
@@ -84,12 +86,11 @@ class RouteReportAgent(ReportingDispatchAgent):
                 log.info('Truncating routing data in database.')
                 self._collection.remove()
 
-            # record the type(s) of node this is. 
-            self._collection.insert({'name': testbed.nodename, 'types': self._routeData.get_node_types()})
-
             log.info('route recording started')
             self.active = True
 
+            self._collection.insert({'name': testbed.nodename, 'types': self._routeData.get_node_types()})
+         
         else:
             log.warning('start collection requested, but collection is already active')
             
@@ -98,8 +99,9 @@ class RouteReportAgent(ReportingDispatchAgent):
             # tell the GUI we want to display this data using a (node and edges) graph.
             dashboard = DeterDashboard()
             # these, ugh, hard coded values can be found in self._update_topology. 
-            # We add the extra_keys so the viz engine can find our nodes and edges.
-            dashboard.add_topology('Routing', self.name, 'nodes', 'edges', extra_keys={'table_type': 'topology'})
+            dashboard.add_topology('Routing', self.name, 'nodes', 'edges',
+                                   template='force_graph_routes.html', 
+                                   extra_keys={'table_type': 'topology'})
             self._viz_configured = True
 
         # return True so that any defined trigger gets sent back to the orchestrator
@@ -123,6 +125,19 @@ class RouteReportAgent(ReportingDispatchAgent):
             return False
 
         return True
+
+    def _update_network_edges(self):
+        '''There are areas of the topology which are virtual, click, and to a lesser extent, containers. 
+        This is a hook to fix these edges as the physical edges no nothing about the virtual nodes. So 
+        we ask the virtual networks for the node mapping between edges and fix them here, before they are 
+        put into the database. Ugly, but whattya gonna do?'''
+        edge_map = self._routeData.get_network_edges()
+        if edge_map:
+            collection = database.getCollection(self.name)
+            collection.insert({
+                'table_type': 'network_edge_map',
+                'map': edge_map
+            })
 
     def _update_topology(self):
         '''Click only. Replace 'vrouter' machine with click network in system topology.'''

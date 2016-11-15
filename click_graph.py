@@ -1,4 +1,4 @@
-#!/usr/bin/env/ python
+#!/usr/bin/env python
 
 # Copyright (C) 2015 University of Southern California
 # This software is licensed under the GPLv3 license, included in
@@ -16,6 +16,8 @@ from netaddr import IPNetwork, IPAddress
 import networkx as nx
 import netifaces as ni
 from networkx.readwrite import json_graph
+
+from magi.testbed import testbed   # only used for phy node name. If possible, remove this dependency.
 
 import logging
 
@@ -135,41 +137,73 @@ class ClickGraph(object):
             known_hosts = self._known_hosts
 
         tables = defaultdict(list)
-        for addr in known_hosts:
+        for dst_addr in known_hosts:
             for node in self._router_graph.nodes():
                 route_table = self._router_graph.node[node]['data'].table
+                possible_routes = []
                 for route in route_table:
-                    if addr in route['dst']:   # is this address on this route?
-                        next_hop = None
-                        for nbr, edge_data in self._router_graph[node].iteritems():
-                            if edge_data['to'] == route['link']:
-                                next_hop = edge_data['to']
-                                break
+                    if dst_addr in route['dst']:   # is this address on this route?
+                        possible_routes.append(route)
 
-                        # p2p table uses link names. (hostnames which ID a link/iface.)
-                        next_hop = self._router_graph[node][nbr]['frm']
-                        dst = socket.gethostbyaddr(str(addr))[0]
-                        tables[node].append({
-                            'dst': dst,
-                            'dst_addr': str(addr),
-                            'iface': route['link'], 
-                            'src': node,
-                            'next_hop': next_hop})
+                if possible_routes:
+                    route = max(possible_routes)    # find the narrowest route that fits the address.
+                    next_hop_link, next_hop_name, next_hop_addr = None, None, None
+                    for nbr, edge_data in self._router_graph[node].iteritems():
+                        if edge_data['to'] == route['link']:
+                            next_hop_link = edge_data['frm']
+                            next_hop_name = nbr
+                            next_hop_addr = None
+                            break
 
-                        break    # GTL - order is important. What order does click put the routes in?
+                    # p2p table uses link names. (hostnames which ID a link/iface.)
+                    # next_hop = self._router_graph[node][nbr]['frm']
+
+                    dst_aliases = socket.gethostbyaddr(str(dst_addr))  # dst_addr is never a click router
+                    dst_link = dst_aliases[0]
+                    dst_name = dst_aliases[1][-1]   # GTL very DETER specific. VERY.
+                    dst_name = dst_name if '-' not in dst_name else dst_name.split('-')[0]
+
+                    src_addr = str(route['dst'].ip)   # The "address" of this interface.
+                    src_name = node
+                    src_link = '{}-{}'.format(node, route['port'])  # fake but unique link name
+
+                    log.debug('p2p route found: {}/{}/{} --> {}/{}/{}'.format(
+                        src_addr, src_name, src_link, dst_addr, dst_name, dst_link))
+                    tables[node].append({
+                        'next_hop_addr': next_hop_addr,
+                        'next_hop_link': next_hop_link,
+                        'next_hop_name': next_hop_name,
+                        'dst_addr': str(dst_addr),  # dst addr
+                        'dst_name': dst_name,       # canonical DETER host name, aka the node name.
+                        'dst_link': dst_link,       # The DETER name for the address on that interface.
+                        'src_addr': src_addr, 
+                        'src_name': src_name,
+                        'src_link': src_link,
+                        'src_iface': src_link,
+                    })
 
         return dict(tables)
 
-    def get_neighbors(self):
+    def get_click_topology(self):
         '''Return a list of neighbor tuples this node knows about. Format [(host1, host2), ... ].'''
-        p2p = self.get_point2point()
-        nbrs = []
-        for node, entries in p2p.iteritems():
-            for entry in entries:
-                if entry['next_hop'] and (node, entry['next_hop']) not in nbrs:
-                    nbrs.append((node, entry['next_hop']))   # append the tuple. 
+        return [(a, b) for a, b in self._router_graph.edges()]
 
-        return nbrs
+    def get_network_edge_map(self):
+        '''Return a node mapping of phy nodes to virtual routers. The map is phy node indexed dict of
+        three tuples: (phy node link name, router name, click node name).'''
+        network_map = {}
+        for node in self._router_graph.nodes():
+            if self._router_graph.node[node]['data'].node_class == self._physical_class: # phy node, add the links.
+                log.debug('adding {} edges to network edge map.'.format(node))
+                network_map[node] = []
+                for nbr, edge_data in self._router_graph[node].iteritems():
+                    network_map[node].append({
+                        'to_link': edge_data['to'], 
+                        'nbr': nbr,
+                        'nbr_host': testbed.nodename})
+
+        return network_map
+
 
     def _build_router_graph_from_click_graph(self):
         for node in self._click_graph.nodes():
@@ -185,6 +219,7 @@ class ClickGraph(object):
                         cn.name = nbr['name']
                         cn.node_class = self._physical_class
                         self._router_graph.add_node(nbr['name'], data=cn)
+                        self._router_graph.add_edge(nbr['name'], node, frm=nbr['to'], to=nbr['frm'])
                         log.debug('added phy node: {}'.format(nbr['name']))
                    
                     # add the edge between these neighbors, keeping track of the 
@@ -206,7 +241,11 @@ class ClickGraph(object):
                         nbr_addr = IPAddress(tokens[0])
                         if nbr_addr in net:
                             names = socket.gethostbyaddr(str(nbr_addr))
-                            return names[1][-1], names[0]   # GTL very DETER specific. Last alias is "real name". 
+                            # GTL very DETER specific. Last alias is "real name". 
+                            # GTL - depending how DETER assigns names to ifaces, we still may not have 
+                            # the "canonical" DETER name here. 
+                            name = names[1][-1] if not '-' in names[1][-1] else names[1][-1].split('-')[0]
+                            return name, names[0]   
         return None
 
     def _mapInterfaceToNeighbor(self, iface):
@@ -313,14 +352,12 @@ class ClickGraph(object):
 
         return therest
 
-
     def _get_router_nbrs(self, node):
         '''
         get a list of routers that this node is connected to via a chain of edges.
         return value is name of router nbr, click graph edge of router nbr, click graph 
         edge of node that leads to nbr. (where edge is a graph edge object.)
         '''
-
         router_nbrs = []
         classes = [self._router_class, self._physical_class]
         for nbr in self._click_graph.neighbors(node):
@@ -354,6 +391,7 @@ class ClickGraph(object):
             self._click_graph.adj)
 
 if __name__ == "__main__":
+    '''Run tests on the ClickGraph object if this file is run alone.'''
     from sys import argv
     
     if '-d' in argv:
@@ -362,7 +400,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO)
 
     def draw_graph(g):
-        nx.draw_spring(g)
+        nx.draw_networkx(g, pos=nx.spring_layout(g), with_labels=True)
         plt.savefig('/users/glawler/tmp/{}.png'.format(g.name))
         log.info('wrote /users/glawler/tmp/{}.png'.format(g.name))
         write_dot(g, '/users/glawler/tmp/{}.dot'.format(g.name))
@@ -379,12 +417,17 @@ if __name__ == "__main__":
         if node:
             if tohosts:
                 for table in rtables[node]:
-                    print('{} --> {} ({}) via link {}/{}'.format(
-                        table['src'],
-                        table['dst'],
+                    print('p2p route : {}/{}/{}/({}) --> {}/{}/{} --> (cloud) --> {}/{}/{}'.format(
+                        table['src_addr'],
+                        table['src_name'],
+                        table['src_link'],
+                        table['src_iface'],
+                        table['next_hop_addr'],
+                        table['next_hop_name'],
+                        table['next_hop_link'],
                         table['dst_addr'],
-                        table['iface'],
-                        table['next_hop']))
+                        table['dst_name'],
+                        table['dst_link']))
 
             else:
                 print('{} routing table: {}'.format(node, rtables[node]))
@@ -410,9 +453,15 @@ if __name__ == "__main__":
     dump_rtable(cg, 'router1')
     dump_rtable(cg, 'router1', tohosts=['10.3.1.1', '10.2.1.1', '10.1.1.1'])
 
-    # import matplotlib as mpl
-    # mpl.use('Agg')
-    # import matplotlib.pyplot as plt
-    # from networkx.drawing.nx_pydot import write_dot
-    # draw_graph(cg._click_graph)
-    # draw_graph(cg._router_graph)
+    edgemap = cg.get_network_edge_map()
+    print('click network edges:')
+    for node, edges in edgemap.iteritems():
+        for e in edges:
+            print('\t{} connects to click node {} (on {}) via link {} '.format(node, e[1], e[2], e[0]))
+
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import matplotlib.pyplot as plt
+    from networkx.drawing.nx_pydot import write_dot
+    draw_graph(cg._router_graph)
+    draw_graph(cg._click_graph)
