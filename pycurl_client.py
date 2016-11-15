@@ -16,6 +16,7 @@ from magi.util.agent import TrafficClientAgent
 from magi.util.processAgent import initializeProcessAgent
 from magi.util import database
 from magi.util.execl import execAndRead
+from libdeterdash import DeterDashboard
 
 log = logging.getLogger(__name__)
 
@@ -61,32 +62,16 @@ class PyCurlAgent(TrafficClientAgent):
 
         # set up visualization server to show our metrics.
         # we do this here as self.name exists here but not in __init__()
-        viz_collection = database.getCollection('viz_data')
-        viz_collection.insert({
-            'datatype': 'horizon_chart',
-            'display': 'PyCurl Client',
-            'table': self.name,
-            'node_key': 'host',
-            'units': [{'data_key': 'total_time',
-                       'display': 'Total Time',
-                       'units': 'ms'},
-                      {'data_key': 'size',
-                       'display': 'Transfer Size',
-                       'units': 'bytes'},
-                      {'data_key': 'speed',
-                       'display': 'Throughput',
-                       'units': 'bytes/sec'}]
-        })
+        dashboard = DeterDashboard()
+        units = [
+            {'data_key': 'total_time', 'display': 'Total Time', 'units': 'ms'},
+            {'data_key': 'size', 'display': 'Transfer Size', 'units': 'bytes'},
+            {'data_key': 'speed', 'display': 'Throughput', 'units': 'bytes/sec'}
+        ]
+        dashboard.add_horizon_chart('PyCurl Client', self.name, 'host', units)
 
-        viz_collection.insert({
-            'datatype': 'horizon_chart',
-            'display': 'PyCurl Client',
-            'table': self.name + '_progress',
-            'node_key': 'host',
-            'units': [{'data_key': 'dl_interval',
-                       'display': 'Throughput',
-                       'unit': 'bytes/sec'}]
-        })
+        units = [{'data_key': 'dl_interval', 'display': 'Throughput', 'unit': 'bytes/sec'}]
+        dashboard.add_horizon_chart('PyCurl', self.name + '_progress', 'host', units)
 
         self._db_configured = True
 
