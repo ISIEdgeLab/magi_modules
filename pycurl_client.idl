@@ -6,20 +6,48 @@ execute: thread
 mainfile: pycurl_client.py
 inherits:
    - TrafficClientAgent
-variables:
-   - name: sizes
-     type: distribution 
-     help: The distribution of the data request. The default is a constant request of 1000 bytes.             
-   - name: servers 
-     type: list 
-     help: A list of available HTTP servers. A server is chosen randomly from the list (inherits from TrafficClientAgent)                    
-   - name: interval 
-     type: distribution 
-     help: The distribution of the time lapse between two requests. Default is one second. (inherits from TrafficClientAgent)
-   - name: useSocks
-     type: boolean
-     help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed and configured on the machine.
 software:
    - curl
    - python-pycurl
    - libdeterdash
+variables:
+   - name: sizes
+     type: distribution 
+     help: The distribution of the data request in bytes. Default is a random value between 100,000 and 1,000,000.
+     default: minmax(100000, 10000000)
+   - name: servers 
+     type: nodelist 
+     help: A list of available HTTP servers. A server is chosen randomly from the list (inherits from TrafficClientAgent)                    
+   - name: interval 
+     type: distribution 
+     default: 1
+     help: The distribution of the time lapse between two requests. Default is one second. (inherits from TrafficClientAgent)
+   - name: useSocks
+     type: boolean
+     default: False
+     help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed and configured on the machine.
+method: 
+  - name: startCollection
+    help: Start creating HTTP curl client traffic
+    args: { }
+  - name: stopCollection
+    help: Stop creating HTTP curl client traffic
+    args: { }
+  - name: increaseTraffic
+    help: Whatever the traffic size for a fetch will be, add the given size to it.
+    args:
+      - name: stepsize
+        type: distribution
+        help: Increase the size by this number of bytes.
+  - name: reduceTraffic
+    help: Whatever the traffic size for a fetch will be, decrease the given size to it. (Not less then zero though.)
+    args:
+      - name: stepsize
+        type: distribution
+        help: Decrease the size by this number of bytes.
+  - name: changeTraffic
+    help: Perturb the chosen size for a fetch by 0 to 100% of the given stepsize randomly. The precentage is chosen randomly for each fetch. 10% of the time the change will be fewer bytes; 10% of the time it will be more bytes; 80% of the time, it will be unchanged. 
+    args: 
+      - name: stepsize 
+        type: distribution
+        help: Possibly change the traffic fetch size by up to or down to this much for each fetch.
