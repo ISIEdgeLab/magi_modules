@@ -65,14 +65,14 @@ class PyCurlAgent(TrafficClientAgent):
         # we do this here as self.name exists here but not in __init__()
         dashboard = DeterDashboard()
         units = [
-            {'data_key': 'total_time', 'display': 'Total Time', 'units': 'ms'},
-            {'data_key': 'size', 'display': 'Transfer Size', 'units': 'bytes'},
-            {'data_key': 'speed', 'display': 'Throughput', 'units': 'bytes/sec'}
+            {'data_key': 'total_time', 'display': 'Total Time', 'unit': 'ms'},
+            {'data_key': 'size', 'display': 'Transfer Size', 'unit': 'bytes'},
+            {'data_key': 'speed', 'display': 'Throughput', 'unit': 'bytes/sec'}
         ]
-        dashboard.add_horizon_chart('PyCurl Client', self.name, 'host', units)
+        dashboard.add_time_plot('PyCurl Client', self.name, 'host', units)
 
         units = [{'data_key': 'dl_interval', 'display': 'Throughput', 'unit': 'bytes/sec'}]
-        dashboard.add_horizon_chart('PyCurl', self.name + '_progress', 'host', units)
+        dashboard.add_time_plot('PyCurl', self.name + '_progress', 'host', units)
 
         self._db_configured = True
 
