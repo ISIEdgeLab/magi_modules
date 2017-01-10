@@ -51,10 +51,8 @@ class NodeStatsReporter(ReportingDispatchAgent):
             
             # TODO: get daemon's process id
             #processId = os.getpid() 
-            f = open(config.getMagiPidFile())
-            processId = f.read()
-            processId = int(processId)
-            f.close()
+            with open(config.getMagiPidFile()) as f:
+                processId = int(f.read())
             
             log.debug("processId: %s" %(processId))
             
@@ -65,7 +63,26 @@ class NodeStatsReporter(ReportingDispatchAgent):
             
             log.debug("childThreadIds: %s" %(childThreadIds))
             log.debug("childProcessIds: %s" %(childProcessIds))
-            
+           
+            try: 
+                uptime, users, create, swapper = self.runtime_info_collector.getUsersUptime()
+                self.collection['users'].insert({
+                    'uptime': uptime,
+                    'users': users,
+                    'creator': create,
+                    'swapper': swapper
+                })
+                log.info('Inserted uptime: {}, users: {}'.format(uptime, ', '.join(users)))
+            except Exception as e:
+                log.debug('error getting users/uptime: {}'.format(e))
+
+            try:
+                ports = self.runtime_info_collector.getOpenPorts()
+                self.collection['ports'].insert({'ports': ports})
+            except Exception as e:
+                log.error('Error reading open ports: {}'.format(e))
+
+
             try:
                 (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage_process(processId)
                 self.collection['process'].insert({
@@ -118,7 +135,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
     @agentmethod()
     def startCollection(self, msg):
         if not self.active:
-            for table_type in ['process', 'node', 'nodeinfo']:
+            for table_type in ['process', 'node', 'nodeinfo', 'users', 'ports']:
                 self.collection[table_type] = database.getCollection(self.name + '_' + table_type)
 
             if not self.runtime_info_collector:
@@ -142,15 +159,14 @@ class NodeStatsReporter(ReportingDispatchAgent):
             if self.visualize:
                 dashboard = DeterDashboard()
                 units = [
-                    {'data_key': 'cpu_usage', 'display': 'CPU Usage', 'unit': ' '},
-                    {'data_key': 'cpu_jiffies', 'display': 'CPU Jiffies', 'unit': ' '},
-                    {'data_key': 'load_average_1', 'display': 'Load Avg. 1 Min', 'unit': ' '},
-                    {'data_key': 'load_average_5', 'display': 'Load Avg. 5 Min', 'unit': ' '},
-                    {'data_key': 'load_average_15', 'display': 'Load Avg. 15 Min', 'unit': ' '},
-                    {'data_key': 'load_average_total', 'display': 'Load Avg. Total', 'unit': ' '}
+                    {'data_key': 'cpu_usage', 'display': 'CPU Usage', 'unit': None},
+                    {'data_key': 'cpu_jiffies', 'display': 'CPU Jiffies', 'unit': None},
+                    {'data_key': 'load_average_1', 'display': 'Load Avg. 1 Min', 'unit': None},
+                    {'data_key': 'load_average_5', 'display': 'Load Avg. 5 Min', 'unit': None},
+                    {'data_key': 'load_average_15', 'display': 'Load Avg. 15 Min', 'unit': None},
+                    {'data_key': 'load_average_total', 'display': 'Load Avg. Total', 'unit': None}
                 ]
-                dashboard.add_horizon_chart('Node Stats', self.name + '_' + 'node',
-                                            'host', units)
+                dashboard.add_time_plot('Node Stats', self.name + '_' + 'node', 'host', units)
 
             log.info('runtime stats collection started')
             
