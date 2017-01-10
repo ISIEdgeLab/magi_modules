@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import os.path
 from platform import platform
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,12 @@ class RuntimeStatsCollector(object):
     def getLoadAverage(self):
         pass
 
+    def getUsersUptime(self):
+        pass
+
+    def getOpenPorts(self):
+        pass
+
 
 class LinuxRuntimeStatsCollector(RuntimeStatsCollector):
     def __init__(self):
@@ -54,6 +61,53 @@ class LinuxRuntimeStatsCollector(RuntimeStatsCollector):
         load_avg = subprocess.Popen(['cat','/proc/loadavg'], stdout=subprocess.PIPE).communicate()[0].split()
         return float(load_avg[0]), float(load_avg[1]), float(load_avg[2]), int(load_avg[4])
 
+    def getUsersUptime(self):
+        '''Return uptime in seconds, list of current logged in users tuple'''
+        uptime = subprocess.Popen(['cat', '/proc/uptime'], stdout=subprocess.PIPE).communicate()[0].split()
+        who_out = subprocess.Popen(['who'], stdout=subprocess.PIPE).communicate()[0].split('\n')
+        users = [u.split()[0] for u in who_out if u if u]
+        users = list(set(users))   # filter duplicates.
+
+        creator = None
+        f = os.path.join('/', 'var', 'emulab', 'boot', 'creator')
+        if os.path.exists(f):
+            try:
+                with open(f) as fd:
+                    creator = fd.readline().strip()
+            except Exception as e:
+                log.error('Error reading {}: {}'.format(f, e))
+
+        swapper = None
+        f = os.path.join('/', 'var', 'emulab', 'boot', 'swapper')
+        if os.path.exists(f):
+            try:
+                with open(f) as fd:
+                    swapper = fd.readline().strip()
+            except Exception as e:
+                log.error('Error reading {}: {}'.format(f, e))
+
+        return uptime[0], users, creator, swapper
+
+    def getOpenPorts(self):
+        allports = subprocess.Popen('sudo netstat -plunt'.split(), stdout=subprocess.PIPE).communicate()[0].split('\n')
+        ports = []
+        for line in allports[2:]:
+            p = line.split()
+            if len(p) < 6:
+                continue
+
+            state = None if len(p) == 6 else p[5]   # state can be empty
+            ports.append({
+                'Proto': p[0],
+                'Recv-Q': p[1],
+                'Send-Q': p[2],
+                'Local Address': p[3],
+                'Foreign Address': p[4],
+                'State': state,
+                'PID/Program name': p[len(p)-1]
+            })
+
+        return ports
 
     def _readstats(self, stats):
         # sample 
@@ -108,5 +162,10 @@ class LinuxRuntimeStatsCollector(RuntimeStatsCollector):
         cpu_stats = [int(x) for x in cpu_stats[13:15]]
         stats['utime'] = cpu_stats[0]
         stats['stime'] = cpu_stats[1]
-        
-    
+
+if __name__ == '__main__':
+    rts = getRuntimeStatsCollector()
+    print(rts.getUsersUptime())
+    p = rts.getOpenPorts()
+    print(p[0])
+    print(p[len(p)-1])
