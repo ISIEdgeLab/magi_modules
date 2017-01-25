@@ -77,7 +77,7 @@ class RouteData(object):
         '''Return the type(s) of node this is as a list.'''
         ret_val = []
         p = path.join('/', 'click')   # support for Click on Windows!!!
-        if path.exists(p) and path.isdir(p):
+        if path.exists(p):  # /click is a dir if in kernel mode, else a UNIX socket!
             ret_val.append('click')
 
         p = path.join('/', 'var', 'containers')

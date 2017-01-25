@@ -26,6 +26,10 @@ log = logging.getLogger(__name__)
 class ClickGraphException(Exception):
     pass
 
+def click_except(msg):
+    log.critical(msg)
+    raise ClickGraphException(msg)
+
 class ClickNode(object):
     def __init__(self):
         super(ClickNode, self).__init__()
@@ -50,6 +54,12 @@ class ClickNode(object):
             raise ClickGraphException('bad attr given to ClickNode: {}'.format(attr))
 
     def _parse_table(self, lines):
+        '''Each entry in the table is a route with dst, gw, port, and link. 
+            dst is an IPNetwork instance
+            gw in an IPAddress instance
+            port is an int and is the index into the click list of out ports
+            link is a unique id for this iface/port
+        '''
         # lines are of the form:
         # 10.1.10.2/32            -               3
         # addr/net  gw  port
@@ -59,21 +69,144 @@ class ClickNode(object):
                 net, gw, port = tokens
                 gw = IPAddress(gw) if gw != '-' else None
                 net = IPNetwork(net)
-                self.table.append({'dst': net, 'gw': gw, 'port': port, 'link': '{}-{}'.format(self.name, port)})
+                self.table.append({
+                    'dst': net,
+                    'gw': gw,
+                    'port': port,
+                    'link': '{}-{}'.format(self.name, port)
+                })
 
     def __repr__(self):
         return '{}/{}'.format(self.name, self.node_class)
 
+
+class ClickConfigParser(object):
+    '''
+        Given a path to click configuration, extract queried data. Supports proc-like fs and unix socket API.
+    '''
+    def __init__(self, confpath='/click'):
+        super(ClickConfigParser, self).__init__()
+        self._confpath = confpath
+
+        if not os.path.isdir(self._confpath):
+            self._socket = self._open_control_socket(confpath)
+            self._read = self._read_socket
+            self._write = self.set_value
+        else:
+            self._read = self._read_file
+            self._write = self.set_value
+
+    def get_value(self, key):
+        '''Given the path or API message, return the value in the file or API response.'''
+        # the only difference between proc and socket API is the delimiter char: '/' or '.' 
+        return self._read(key)
+
+    def set_value(self, key):
+        click_except('set_value() not yet implemented.')
+        pass
+
+    def _read_socket(self, key):
+        '''Send msg to the connected click control socket and return the parsed response.'''
+        # for protocol details see: http://read.cs.ucla.edu/click/elements/controlsocket
+        # Basic protocol response is like:
+        # XXX: <msg>
+        # DATA NNN
+        # ...
+        # Where XXX is 200 success; not 200 error and NNN is len of DATA in bytes.
+        msg = key.replace(os.sep, '.')
+        self._socket.sendall('READ ' + msg + '\r\n')   # CRLF is expected.
+        datasize = self._read_socket_response(self._socket)
+        if datasize > 0:
+            log.debug('reading {} bytes'.format(datasize))
+            buf = self._socket.recv(datasize)
+            # Not sure why, but "list" puts the number of items first. So remove that
+            # if this is a 'list' command.
+            lines = [t for t in buf.split('\n') if t]  # remove empty lines and split on \n
+            if msg.lower() == 'list':
+                return lines[1:]
+            return lines
+
+        return []
+
+    def _read_socket_response(self, s):
+        '''Read the click response. Return response and amounf of data to read.'''
+        def _readline(s):
+            buf = ''
+            while True:
+                c = s.recv(1)
+                if c == '\r':
+                    c = s.recv(1)
+                    if c == '\n':
+                        break
+                
+                buf += c
+            return buf
+
+        resp_line = _readline(s)
+        code, _ = resp_line.split(' ', 1)
+        if code != '200':
+            return -1
+
+        line = _readline(s)
+        _, bytecnt = line.split()
+        try:
+            int(bytecnt)
+        except TypeError:
+            return -1
+
+        return int(bytecnt)
+
+    def _read_file(self, key):
+        subpath = key.replace('.', os.sep)   # . --> / 
+        path = os.path.join(self._confpath, subpath)
+        lines = []
+        try:
+            log.debug('Reading file {}'.format(path))
+            with open(path, 'r') as fd:
+                lines = [l.strip() for l in fd.readlines()]
+                # Not sure why, but "list" puts the number of items first. So remove that
+                # if this is a 'list' command.
+                if key.lower() == 'list':
+                    lines = lines[1:]
+        except IOError as e:
+            log.warn('Error opening file: {}. Path built from key {}.'.format(path, key))
+            # not an error. some nodes don't have all keys.
+
+        return lines
+
+    def _open_control_socket(self, path):
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.connect(path)
+        except Exception as e:
+            click_except('Unable to open click control UNIX socket {}: {}'.format(self._confpath, e))
+
+        s.settimeout(1)  # should be very quick as it's local.
+
+        # read proto header and version.
+        buf = s.recv(64)
+        # should be like "Click::ControlSocket/1.3"
+        if not buf.startswith('Click::ControlSocket'):
+            click_except('Bad protocol on click control socket, exiting.')
+
+        try:
+            _, v = buf.strip().split('/')
+            if float(v) < 1.3:
+                click_except('Click control protocol too old at {}'.format(v))
+        except (ValueError, TypeError):
+            click_except('Error in click control protocol.')
+
+        return s
 
 class ClickGraph(object):
     """
     Represent the topology graph and various bits. Read the live /click dir for initial graph configuration and
     live updates. 
     """
-    def __init__(self, confdir='/click'):
+    def __init__(self, confpath='/click'):
         super(ClickGraph, self).__init__()
 
-        self._confdir = confdir                 # The /click dir which contains live info.
+        self._confpath = confpath                 # The /click dir which contains live info.
 
         # These classes define which nodes are routers and other types of nodes in teh click graph.
         self._router_class = 'RadixIPLookup'    # anything that has this class is a leaf in the graph.
@@ -81,7 +214,7 @@ class ClickGraph(object):
         self._localhost_class = 'ToHost'        # anything of this class points to the localhost.
 
         self._click_graph = nx.DiGraph(name='click')    # This is the "full" click graph built from /click.
-        self._build_graph_from_filesystem()
+        self._build_click_graph(self._confpath)
 
         self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node subgraph.
         self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
@@ -160,12 +293,13 @@ class ClickGraph(object):
 
                     dst_aliases = socket.gethostbyaddr(str(dst_addr))  # dst_addr is never a click router
                     dst_link = dst_aliases[0]
-                    dst_name = dst_aliases[1][-1]   # GTL very DETER specific. VERY.
-                    dst_name = dst_name if '-' not in dst_name else dst_name.split('-')[0]
+                    # GTL VERY VERY VERY DETER specific. We need the canonical name for the nade and 
+                    # we use DETER naming knowledge to get it from the aliases. BAD. 
+                    dst_name = dst_aliases[1][0].rsplit('-', 1)[0]
 
                     src_addr = str(route['dst'].ip)   # The "address" of this interface.
                     src_name = node
-                    src_link = '{}-{}'.format(node, route['port'])  # fake but unique link name
+                    src_link = route['link']
 
                     log.debug('p2p route found: {}/{}/{} --> {}/{}/{}'.format(
                         src_addr, src_name, src_link, dst_addr, dst_name, dst_link))
@@ -204,7 +338,6 @@ class ClickGraph(object):
 
         return network_map
 
-
     def _build_router_graph_from_click_graph(self):
         for node in self._click_graph.nodes():
             data = self._click_graph.node[node]['data']
@@ -241,10 +374,10 @@ class ClickGraph(object):
                         nbr_addr = IPAddress(tokens[0])
                         if nbr_addr in net:
                             names = socket.gethostbyaddr(str(nbr_addr))
-                            # GTL very DETER specific. Last alias is "real name". 
-                            # GTL - depending how DETER assigns names to ifaces, we still may not have 
-                            # the "canonical" DETER name here. 
-                            name = names[1][-1] if not '-' in names[1][-1] else names[1][-1].split('-')[0]
+                            # GTL This is still VERY VERY DETER specific and is very bad. We use DETER naming
+                            # knowledge to arbitrarily strip things from an alias and use that as a 
+                            # canonical name!
+                            name = names[1][0].rsplit('-', 1)[0]
                             return name, names[0]   
         return None
 
@@ -257,72 +390,59 @@ class ClickGraph(object):
         mask = addrs[ni.AF_INET][0]['netmask']
         return self._findNeighbor(addr, mask)
 
-    def _build_graph_from_filesystem(self):
-        ''' Parse the /click directory to build the unconnected nodes.'''
-
-        if not os.path.isdir(self._confdir):
-            log.critical('No such configuration directory {}'.format(self._confdir))
-            raise ClickGraphException('{} is not there. Unable to do anything.'.format(self._confdir))
-     
-        # grab the top level dir and file names.
-        root, dirs, files = os.walk(self._confdir, topdown=True).next()
-        dirs = [d for d in dirs if not d.startswith('.')]   # filter the . dirs that click uses.
-        for d in dirs:
+    def _build_click_graph(self, confpath):
+        '''Build a click graph given a configuration.'''
+        p = ClickConfigParser(confpath)
+        handles = p.get_value('list')
+        log.debug('click handles: {}'.format(handles))
+        for handle in handles:
             n = ClickNode()
-            # name *must* come before talble as the name of the node is used in the link in the table!
             for f in ['class', 'name', 'table', 'config']:
-                path = os.path.join(self._confdir, d, f)
-                if not os.path.isfile(path):
-                    continue
-
-                with open(path) as fd:
-                    lines = [l.strip() for l in fd.readlines()]
-
+                lines = p.get_value('{}.{}'.format(handle, f))
                 n.parse(f, lines)
 
             # we keep the properties of the node in "data" rather than make ClickNode hashable. Dunno why.
             self._click_graph.add_node(n.name, data=n)
 
         # now all the nodes are built. Use the ports file to build the graph.
-        for d in dirs:
-            ports_file = os.path.join(self._confdir, d, 'ports')
-            if os.path.isfile(ports_file):
-                out_index = None
-                with open(ports_file) as pfd:
-                    lines = [l.strip() for l in pfd.readlines()]
+        for handle in handles:
+            lines = p.get_value('{}.{}'.format(handle, 'ports'))
+            if lines:
+                self._add_click_port_edges(handle, lines)
 
-                output_mode = False
-                port_num = 0
-                for l in lines:
-                    if 'input' in l or 'inputs' in l:
-                        continue
-                    elif 'output' in l or 'outputs' in l:
-                        output_mode = True
-                        port_num = 0
-                        continue
+    def _add_click_port_edges(self, handle, lines):
+        output_mode = False
+        out_port_num = 0
+        for l in lines:
+            if 'input' in l or 'inputs' in l:
+                continue
+            elif 'output' in l or 'outputs' in l:
+                output_mode = True
+                continue
 
-                    # push    -       [0] ThreadSafeQueue@93
-                    buf = l.split('\t')[2]
-                    # remove [..]
-                    buf = re.sub('\[\d+\]', '', buf)
-                    # split by possible commas and strip whitespace
-                    tokens = [t.strip() for t in buf.split(',')]
+            if not output_mode:
+                # # input mode links are on one line and look like:
+                # # push    -       link_8_7_bw [0], link_6_7_bw [0], ICMPError@110 [0], ICMPError@114 [0], ...
+                # buf = l.split('\t')[2]
+                # tokens = re.findall('([\w@]+) \[(\d+)\]', buf)  # find all (name, port) pairs.
+                # for t in tokens:
+                #     self._click_graph.add_edge(t[0], handle,
+                #                                port=t[1],
+                #                                link='{}-{}'.format(t[0], t[1]))
+                pass  # the in edges will be done when we add the nbr's ports...
+            else:
+                # output mode links are on mulitple lines, where the nth line is the nth output port.
+                # push    -       [0] ThreadSafeQueue@93
+                buf = l.split('\t')[2]
+                # remove [..]
+                tokens = re.findall('\[(\d+)\] ([\w@]+)', buf)
+                for t in tokens:
+                    self._click_graph.add_edge(handle, t[1],
+                                               port=str(out_port_num),
+                                               link='{}-{}'.format(handle, out_port_num))
+                    out_port_num += 1
 
-                    # log.debug('tokens {}'.format(tokens))
-                    for t in tokens:
-                        if not output_mode:
-                            # assumes name == dir, which may be incorrect?
-                            self._click_graph.add_edge(t, d, port=port_num)
-                        else:
-                            # assumes name == dir, which may be incorrect?
-                            self._click_graph.add_edge(d, t, port=port_num)
-
-                        port_num += 1
-
-
-        return True   # sure, why not?
-
-    def _find_classes_in_subtree(self, node, nbr, prev_nbr, classes):
+    def _find_classes_in_subtree(self, node, nbr, classes):
         '''
         Given a nbr of a node, follow the nodes links until you hit a node with that class
         is in the given class list. The idea here is to trace the edges until we find a router or
@@ -335,20 +455,20 @@ class ClickGraph(object):
         Return value is a (node name, edge) tuple of the found classes.
         '''
         if nbr == node:
-            return [(None, None)] # looped back to orig node. Ignore.
+            return [None] # looped back to orig node. Ignore.
 
         node_data = self._click_graph.node[nbr]['data']
         if node_data.node_class in classes:
             # found one, return it and ignore subgraph below this node.
-            return [(nbr, self._click_graph[prev_nbr][nbr])]
+            return [nbr]
 
         next_nbrs = self._click_graph.successors(nbr)
         if not next_nbrs:
-            return [(None, None)]    # dead end. toh or something.
+            return [None]    # dead end. toh or something.
 
         therest = []
         for next_nbr in next_nbrs:
-            therest += self._find_classes_in_subtree(node, next_nbr, nbr, classes)
+            therest += self._find_classes_in_subtree(node, next_nbr, classes)
 
         return therest
 
@@ -361,24 +481,22 @@ class ClickGraph(object):
         router_nbrs = []
         classes = [self._router_class, self._physical_class]
         for nbr in self._click_graph.neighbors(node):
-            subtree_nodes = self._find_classes_in_subtree(node, nbr, node, classes)
+            subtree_nodes = self._find_classes_in_subtree(node, nbr, classes)
             # remove dead ends (which will be None)
-            found_node = [n for n in subtree_nodes if n[0]]
+            found_node = [n for n in subtree_nodes if n]
             if found_node:    # did not find a dead end.
                 # Only one path should lead to a class we want.
                 if len(found_node) != 1:
-                    msg = 'click graph is broken somewhere in subgraph from {}'.format(node)
-                    log.critical(msg)
-                    raise ClickGraphException(msg)
+                    click_except('click graph is broken somewhere in subgraph from {}'.format(node))
 
-                n, e = found_node[0]
+                n = found_node[0]
                 if self._click_graph.node[n]['data'].node_class == self._physical_class:
                     name, frm = self._mapInterfaceToNeighbor(self._click_graph.node[n]['data'].config[0])
                 else:
                     name = n
-                    frm = '{}-{}'.format(name, e['port'])   # recreate the link name. 
+                    frm = None
 
-                to = '{}-{}'.format(node, self._click_graph[node][nbr]['port'])
+                to = self._click_graph[node][nbr]['link']
                 router_nbrs.append({'name': name, 'frm': frm, 'to': to})
 
         return router_nbrs
@@ -448,7 +566,9 @@ if __name__ == "__main__":
     print(nx.info(cg._router_graph))
 
     dump_router_nbrs(cg, 'router1')
-    dump_router_nbrs(cg, 'router5')
+    dump_router_nbrs(cg, 'router7')
+    dump_router_nbrs(cg, 'router8')
+    dump_router_nbrs(cg, 'router9')
 
     dump_rtable(cg, 'router1')
     dump_rtable(cg, 'router1', tohosts=['10.3.1.1', '10.2.1.1', '10.1.1.1'])
@@ -457,7 +577,9 @@ if __name__ == "__main__":
     print('click network edges:')
     for node, edges in edgemap.iteritems():
         for e in edges:
-            print('\t{} connects to click node {} (on {}) via link {} '.format(node, e[1], e[2], e[0]))
+            # {'to_link': 'crypto5-2-elink5-2', 'nbr_host': 'vrouter', 'nbr': 'router8'}
+            print('\t{} connects to click node {} (on {}) via link {} '.format(
+                node, e['nbr'], e['nbr_host'], e['to_link']))
 
     import matplotlib as mpl
     mpl.use('Agg')
