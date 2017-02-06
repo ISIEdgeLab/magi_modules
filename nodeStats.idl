@@ -12,12 +12,15 @@ variables:
   - name: truncate
     help: If true, truncate Magi database records on start or restart of the agent.
     type: boolean
+    default: true
   - name: recordLimit
-    help: Limit the number of records about the node to the number given.
+    help: Limit the number of records about the node to the number given. Do not limit if value is zero.
     type: integer
+    default: 0
   - name: visualize
     help: If true, make stats available to the situational awareness application.
     type: boolean
+    default: true
 method: 
   - name: startCollection
     help: Start collecting stats about this node.

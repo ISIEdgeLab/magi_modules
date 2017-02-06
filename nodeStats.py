@@ -33,7 +33,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
         self.truncate = True
         self.recordLimit = 0
         self.visualize = True
-        self.collection = {}
+        self.collection = None
 
     def periodic(self, now):
         if self.active:
@@ -41,13 +41,14 @@ class NodeStatsReporter(ReportingDispatchAgent):
 
             (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage()
             la1, la5, la15, latotal = self.runtime_info_collector.getLoadAverage()
-            self.collection['node'].insert({
-                                    "cpu_usage" : cpu_p, 
-                                    "cpu_jiffies" :cpu_j,
-                                    "load_average_1" : la1, 
-                                    "load_average_5" : la5, 
-                                    "load_average_15" : la15, 
-                                    "load_average_total" : latotal})
+            self.collection.insert({
+                'table_type': 'ns_node',
+                'cpu_usage' : cpu_p, 
+                'cpu_jiffies' :cpu_j,
+                'load_average_1' : la1, 
+                'load_average_5' : la5, 
+                'load_average_15' : la15, 
+                'load_average_total' : latotal})
             
             # TODO: get daemon's process id
             #processId = os.getpid() 
@@ -66,7 +67,8 @@ class NodeStatsReporter(ReportingDispatchAgent):
            
             try: 
                 uptime, users, create, swapper = self.runtime_info_collector.getUsersUptime()
-                self.collection['users'].insert({
+                self.collection.insert({
+                    'table_type': 'ns_users',
                     'uptime': uptime,
                     'users': users,
                     'creator': create,
@@ -78,46 +80,48 @@ class NodeStatsReporter(ReportingDispatchAgent):
 
             try:
                 ports = self.runtime_info_collector.getOpenPorts()
-                self.collection['ports'].insert({'ports': ports})
+                self.collection.insert({'table_type': 'ns_ports', 'ports': ports})
             except Exception as e:
                 log.error('Error reading open ports: {}'.format(e))
 
 
             try:
                 (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage_process(processId)
-                self.collection['process'].insert({
-                                        "process_id" : processId,
-                                        "cpu_usage" : cpu_p,
-                                        "cpu_jiffies": cpu_j})
+                self.collection.insert({
+                    'table_type': 'ns_process',
+                    'process_id' : processId,
+                    'cpu_usage' : cpu_p,
+                    'cpu_jiffies': cpu_j})
             except:
                 pass
 
             for threadId in childThreadIds:
                 try:
                     (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage_process(processId, threadId)
-                    self.collection['process'].insert({
-                                            "process_id" : processId,
-                                            "thread_id" : threadId,
-                                            "cpu_usage" : cpu_p,
-                                            "cpu_jiffies": cpu_j})
+                    self.collection.insert({
+                        'table_type': 'ns_process',
+                        'process_id' : processId,
+                        'thread_id' : threadId,
+                        'cpu_usage' : cpu_p,
+                        'cpu_jiffies': cpu_j})
                 except:
                     pass
 
             for processId in childProcessIds:
                 try:
                     (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage_process(processId)
-                    self.collection['process'].insert({
-                                            "process_id" : processId,
-                                            "thread_id" : -1,
-                                            "cpu_usage" : cpu_p,
-                                            "cpu_jiffies": cpu_j})
+                    self.collection.insert({
+                        'table_type': 'ns_process',
+                        'process_id' : processId,
+                        'thread_id' : -1,
+                        'cpu_usage' : cpu_p,
+                        'cpu_jiffies': cpu_j})
                 except:
                     pass
             
             if self.recordLimit:
-                #Keep only the latest
-                for c in self.collection.values():
-                    c.remove({'created': {'$lt': time.time() - (self.recordLimit * self.interval)}})
+                # Keep only the latest
+                self.collection.remove({'created': {'$lt': time.time() - (self.recordLimit * self.interval)}})
               
         else:
             log.info("not active")
@@ -135,8 +139,8 @@ class NodeStatsReporter(ReportingDispatchAgent):
     @agentmethod()
     def startCollection(self, msg):
         if not self.active:
-            for table_type in ['process', 'node', 'nodeinfo', 'users', 'ports']:
-                self.collection[table_type] = database.getCollection(self.name + '_' + table_type)
+            # for table_type in ['process', 'node', 'nodeinfo', 'users', 'ports']:
+            self.collection = database.getCollection(self.name)
 
             if not self.runtime_info_collector:
                 try:
@@ -147,13 +151,13 @@ class NodeStatsReporter(ReportingDispatchAgent):
                 
             if self.truncate:
                 log.debug('truncating old records')
-                for c in self.collection.values():
-                    c.remove()
+                self.collection.remove()
 
-            self.collection['nodeinfo'].insert({
-                                    "experiment" : testbed.getExperiment(), 
-                                    "project" : testbed.getProject(), 
-                                    "is_container" : testbed.amAVirtualNode()})
+            self.collection.insert({
+                "table_type" : 'ns_nodeinfo',
+                "experiment" : testbed.getExperiment(), 
+                "project" : testbed.getProject(), 
+                "is_container" : testbed.amAVirtualNode()})
 
             # setup visualiztion. We only setup the 'node' table. We could set up the others if we wanted. 
             if self.visualize:
@@ -166,7 +170,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
                     {'data_key': 'load_average_15', 'display': 'Load Avg. 15 Min', 'unit': None},
                     {'data_key': 'load_average_total', 'display': 'Load Avg. Total', 'unit': None}
                 ]
-                dashboard.add_time_plot('Node Stats', self.name + '_' + 'node', 'host', units)
+                dashboard.add_time_plot('Node Stats', self.name, 'host', units)
 
             log.info('runtime stats collection started')
             
