@@ -1,0 +1,2 @@
+This MAGI agent aggregates given stats from table entries in a database and writes these stats back to the database.
+The data reduction can be any valid python code/expression. 
