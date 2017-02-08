@@ -1,0 +1,11 @@
+name: data_aggregation_agent
+magi_version: 1.7
+display: Enclave Data Agent
+description: A magi agent which aggregates existing data in the database. 
+execute: thread 
+mainfile: data_aggregation_agent.py
+inherits:
+   - ReportingDispatchAgent
+software:
+   - python-pymongo
+   - libdeterdash
