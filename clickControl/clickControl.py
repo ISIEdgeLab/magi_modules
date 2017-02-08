@@ -20,8 +20,10 @@ from magi.db import Collection
 from one_hop_neighbors import OneHopNeighbors
 
 
-def getAgent():
-    return clickControlAgent()
+def getAgent(**kwargs):
+   agent = clickControlAgent()
+   agent.setConfiguration(None, **kwargs)
+   return agent
 
 class clickControlAgent(DispatchAgent):
     """
