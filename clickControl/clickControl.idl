@@ -1,0 +1,10 @@
+name: clickControl
+display:  Allows the adjustment of click controlled paramteres
+description: Controls Click
+execute: thread
+mainfile: clickControl.py
+inherits:
+   - DispatchAgent
+
+software:
+   - python-netifaces
