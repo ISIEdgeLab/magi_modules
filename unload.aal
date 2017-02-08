@@ -1,0 +1,15 @@
+streamstarts: [main]
+
+groups:
+    endpoint_group: [crypto1, crypto2, crypto3]
+
+agents:
+    ipsec_agent:
+        group: endpoint_group
+        path: /proj/edgect/share/ipsec
+        execargs: {}
+
+eventstreams:
+    main:
+        - type: trigger
+          triggers: [{timeout: 0, target: exit}]
