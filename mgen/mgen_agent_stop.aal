@@ -1,0 +1,25 @@
+streamstarts: [traffic]
+
+groups:
+    apps: [nodea, nodeb]
+
+agents:
+    mgen_agents:
+        group: apps
+        path: /proj/edgect/magi/modules/mgen
+        execargs: {
+            # not needed, but still required. 
+            config_dir: /proj/edgect/magi/modules/mgen,
+            log: /tmp/mgen.log
+        }
+
+eventstreams:
+    traffic:
+        - type: event
+          agent: mgen_agents
+          method: stop
+          trigger: mgen_stopped
+          args: {}
+
+        - type: trigger
+          triggers: [{event: mgen_stopped}]

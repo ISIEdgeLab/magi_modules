@@ -1,0 +1,28 @@
+streamstarts: [traffic]
+
+groups:
+    apps: [nodea, nodeb]
+
+agents:
+    mgen_agents:
+        group: apps
+        path: /proj/edgect/magi/modules/mgen
+        execargs: {
+            # location of per-node MGEN config files. File must be of the form
+            # <nodename>.mgen. The file format is the standard MGEN command file
+            # format. 
+            config_dir: /proj/edgect/magi/modules/mgen,
+            log: /tmp/mgen.log
+        }
+
+eventstreams:
+    traffic:
+        - type: event
+          agent: mgen_agents
+          method: start
+          trigger: mgen_started
+          args: {}
+
+        # catch the returning trigger, so we know mgen started correctly.
+        - type: trigger
+          triggers: [{event: mgen_started}]

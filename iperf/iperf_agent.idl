@@ -1,0 +1,10 @@
+name: iperf
+magi_version: 1.7
+display: iperf
+description: run iperf on clients and servers
+execute: thread 
+mainfile: iperf_agent.py
+inherits:
+   - DispatchAgent
+software:
+   - iperf3 

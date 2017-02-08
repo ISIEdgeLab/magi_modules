@@ -1,0 +1,17 @@
+Agent: iperf
+
+Run iperf on clients and servers, saving off the logs for later analysis. Write data to magi database?
+
+The agent only supports a single process (client or server) per node. 
+
+Define flows via the self.flows argument in the AAL. The format is a list of client/server dict pairs. Like so:
+
+
+self.flows = [
+                {'client': 'foo' 'server': 'baz'}, 
+                {'client': 'bar' 'server': 'koala'}, 
+             ]
+
+Args to the client are standard: just '-c server'. Use self.client_args to pass other args to the client.
+
+Logs are written to 'logdir'. If logdir does not exist, it is created. Logs are timestamped and include the node name, thus the logdir can be an NFS mounted dir and the logs will not overwrite one another.

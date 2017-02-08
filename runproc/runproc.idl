@@ -1,0 +1,6 @@
+name: runproc
+magi_version: 1.7
+display: runproc
+description: Runs a process via the command line. 
+mainfile: runproc.py
+execute: thread

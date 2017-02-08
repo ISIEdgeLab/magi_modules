@@ -1,0 +1,18 @@
+name: mgen_agent
+magi_version: 1.7
+display: MGEN Agent
+description: An agent for running mgen. Most of the smarts are in the external configuration file.
+execute: thread 
+mainfile: mgen_agent.py
+inherits:
+   - DispatchAgent
+variables:
+   - name: config
+     type: string
+     help: Path to the configuration file for the MGEN server. 
+   - name: log
+     type: string
+     help: The stderr and stdout of the MGEN process. 
+software:
+   - mgen 
+   - g++

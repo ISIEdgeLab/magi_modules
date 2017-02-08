@@ -1,0 +1,6 @@
+1.0 listen udp 30777
+60.0 ignore udp 30777
+1.0 listen tcp 29778
+60.0 ignore tcp 29778
+1.0 listen tcp 29779
+60.0 ignore tcp 29779
