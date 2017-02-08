@@ -1,0 +1,34 @@
+
+streamstarts: [ main ]
+
+groups:
+  nodes: [server1, server2, server3, control]
+
+agents:
+  node_stats:
+    group: nodes
+    path: /users/glawler/src/edgect/magi/agents/nodeStats
+    execargs: 
+      interval: 5
+      experimentDescription: "This is a test about nothing."
+
+eventstreams:
+  main: 
+  - type: event
+    agent: node_stats
+    method: startCollection
+    args: {}
+
+  - type: trigger
+    triggers: [{timeout: 30000}]
+
+  - type: event
+    agent: node_stats
+    method: stopCollection
+    args: {}
+
+  # unload agents and exit
+  - type: trigger
+    triggers: [{target: exit, timeout: 3000}]
+
+# vim: noautoindent:nosmartindent:nocindent:expandtab:filetype=:ts=2:sw=2
