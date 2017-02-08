@@ -1,0 +1,34 @@
+streamstarts: [ main ]
+
+groups:
+  route_nodes: [crypto1, crypto2, crypto3, ct1, ct2, ct3, server1, server2, server3, traf11, traf12, traf13, traf14, traf15, traf16, traf17, traf18, traf21, traf22, traf23, traf24, traf25, traf26, traf27, traf28, traf31, traf32, traf33, traf34, traf35, traf36, traf37, traf38, vrouter]
+
+agents:
+  routes_agent:
+    group: route_nodes
+    path: /users/glawler/src/edgect/magi/agents/route_agent
+    execargs:
+      interval: 10
+      truncate: true
+      recordLevel: 0
+
+eventstreams:
+  main: 
+  - type: event
+    agent: routes_agent
+    method: startCollection
+    args: {}
+
+  - type: trigger
+    triggers: [{timeout: 60000}]
+
+  - type: event
+    agent: routes_agent
+    method: stopCollection
+    args: {}
+
+  # unload agents and exit
+  - type: trigger
+    triggers: [{target: exit, timeout: 3000}]
+
+# vim: noautoindent:nosmartindent:nocindent:expandtab:filetype=:ts=2:sw=2
