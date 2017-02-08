@@ -10,8 +10,10 @@ Agent for configuring IPsec with strongswan.
 Given a set of endpoint hosts, creates a fully connected mesh of IPsec tunnels.
 """
 
-def getAgent():
-    return ipsec()
+def getAgent(**kwargs):
+   agent = ipsec()
+   agent.setConfiguration(None, **kwargs)
+   return agent
 
 log = logging.getLogger(__name__)
 
