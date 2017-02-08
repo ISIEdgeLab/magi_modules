@@ -1,0 +1,4 @@
+This is a rewritten "apache" agent. It does not really configure apache, 
+rather, it replaces the older cgi scripts with a WSGI application. 
+
+We can add Apache configuration if needed "later".

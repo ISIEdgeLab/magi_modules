@@ -1,0 +1,11 @@
+<VirtualHost *>
+    WSGIDaemonProcess traffic_gen user=www-data group=www-data threads=5
+    WSGIScriptAlias / /var/www/traffic_gen/traffic_gen.wsgi
+
+    <Directory /var/www/traffic_gen>
+        WSGIProcessGroup traffic_gen
+        WSGIApplicationGroup %{GLOBAL}
+        Order deny,allow
+        Allow from all
+    </Directory>
+</VirtualHost>
