@@ -1,10 +1,42 @@
 name: clickControl
-display:  Allows the adjustment of click controlled paramteres
+display: Click Control
+help:  Allows the adjustment of click controlled paramteres
 description: Controls Click
 execute: thread
 mainfile: clickControl.py
 inherits:
-   - DispatchAgent
-
+  - DispatchAgent
 software:
-   - python-netifaces
+  - python-netifaces
+method:
+  - name: startClick
+  - name: stopClick
+  - name: updateLinks
+  - name: updateDelay
+  - name: updateCapacity
+  - name: updateRoute
+  - name: updateRoutes
+  - name: anycastHijack
+  - name: startRouteFlaps
+  - name: stopRouteFlaps
+  - name: routeFlap
+    help: Flap between two routes on the click routers.
+    args:
+      - name: flaps
+        help:
+        type: string
+      - name: rate
+        help: The frequency at which to flap, in seconds.
+        type: float
+  - name: startUDPTraffic
+  - name: stopUDPTraffic
+  - name: setUDPRate
+    help: Set the UDP rate.
+    args: 
+      - name: rate
+        help: The rate of the UDP traffic.
+        type: integer
+      - name: node
+        help: The node on which to set the rate.
+        type: string
+  - name: updateLossProbability
