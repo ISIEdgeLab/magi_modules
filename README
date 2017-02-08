@@ -1,0 +1,33 @@
+Agent: HTTP Client
+
+name: sizes
+type: distribution 
+help: The distribution of the data request. The default is a constant request of 1000bytes             
+
+name: servers 
+type: list 
+help: A list of available HTTP servers. A server is choosen randomly from the list (inherits from trafficclient)                    
+
+name: interval 
+type: distribution 
+help: The distribution of the time lapse between two requests. Default is one second. (inherits from trafficclient)
+
+name: useSocks
+type: boolean
+help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed on configured on the machine.
+
+
+Distributions Currently Available in MAGI  
+(provides the python/lib/random.py module that implements pseudo-random number generators for various distributions) 
+
+minmax(min,max): Returns a value unformaly distributed between min and max 
+pareto(alpha [,scale] [,cap]): returns a value from the pareto distrubtion. If scale is specified, the value is scaled by factor scale
+                               If cap is specified, it returns a maximum of cap.   
+gamma(alpha,rate [,cap]): Returns a value from the gamma distribution. 
+			  If cap is specified, it returns cap if the value is greater than cap   
+expo(lambda [,scale] [,cap]): Returns a value from an exponential distribution. if scale is specified, the value us scale by the factor scale 
+                              If cap is specified, it returns a maximum of cap. 
+
+
+
+
