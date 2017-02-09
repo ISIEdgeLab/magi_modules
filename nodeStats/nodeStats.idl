@@ -24,8 +24,8 @@ variables:
 method: 
   - name: startCollection
     help: Start collecting stats about this node.
-    args: { }
+    args:
   - name: stopCollection
     help: Stop collecting stats about this node.
-    args: { }
+    args:
 

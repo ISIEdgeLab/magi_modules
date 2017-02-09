@@ -21,4 +21,4 @@ method:
         default: false
   - name: stop
     help: Stop the process, if running.
-    args: []
+    args:

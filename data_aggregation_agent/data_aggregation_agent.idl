@@ -27,7 +27,7 @@ variables:
 method:
   - name: startCollection
     help: Start data aggregation
-    args: []
+    args:
   - name: stopCollection
     help: Stop data aggregation
-    args: []
+    args:

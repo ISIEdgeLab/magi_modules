@@ -20,7 +20,7 @@ software:
 method:
   - name: start
     help: start MGEN
-    args: []
+    args:
   - name: stop
     help: stop the MGEN processes
-    args: []
+    args:

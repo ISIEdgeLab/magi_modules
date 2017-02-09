@@ -18,15 +18,15 @@ variables:
 method:
     - name: setDefaults
       help: Request to configure variables for defaults of in/out on each experiment interface, 1 second recording, storing pkts and bytes
-      args: []
+      args:
 
     - name: startCollection
       help: actually start the recording process
-      args: []
+      args:
 
     - name: stopCollection
       help: stop the recording process
-      args: []
+      args:
 
 datatables:
 

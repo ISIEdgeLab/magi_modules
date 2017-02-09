@@ -25,7 +25,7 @@ variables:
 method:
   - name: start_traffic
     help: Start iperf traffic
-    args: []
+    args:
   - name: stop_traffic
     help: Stop iperf traffic
-    args: []
+    args:

@@ -13,11 +13,11 @@ software:
 method:
     - name: startIpsec
       help: start the IPsec tunnels
-      args: []
+      args: 
 
     - name: stopIpsec
       help: stop the IPsec tunnels
-      args: []
+      args: 
 
 variables:
     - name: psk
