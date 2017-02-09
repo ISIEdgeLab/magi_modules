@@ -1,6 +1,6 @@
 name: httpclient
 magi_version: 1.7
-display: HTTP Client
+display: Curl Client
 description: A web client agent that uses the system curl software to perform http requests
 execute: thread 
 mainfile: curl_client.py

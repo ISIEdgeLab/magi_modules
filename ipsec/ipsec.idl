@@ -10,7 +10,7 @@ inherits:
 software:
     - strongswan
 
-methods:
+method:
     - name: startIpsec
       help: start the IPsec tunnels
       args: []
