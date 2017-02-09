@@ -1,10 +1,17 @@
 name: iron
 magi_version: 1.7
 display: IRON 
-description: IRON solution for EdgeCT
+description: IRON solution for EdgeCT. Assumes and uses existing installation of IRON test framework scripts on users. Also: this agent is out of date and most likely won't work. 
 execute: thread 
 mainfile: iron_agent.py
 inherits:
-   - DispatchAgent
+  - DispatchAgent
 software:
-   - iron 
+  - iron
+method:
+  - name: start_iron
+    help: Start the IRON testing framework scripts.
+    args: []
+  - name: stop_iron
+    help: Stop the IRON testing framework scripts.
+    args: []

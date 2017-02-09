@@ -10,6 +10,23 @@ software:
   - libdeterdash
 inherits:
   - ReportingDispatchAgent
+variables:
+  - name: interval
+    help: How often in seconds to record routing information
+    default: 5
+    type: integer
+  - name: truncate
+    help: If true, truncate existing database routing information.
+    default: true
+    type: boolean
+  - name: recordLimit
+    help: If not zero, only keep this many database entries of routing data. If zero, keep all entries recorded.
+    default: 0
+    type: integer
+  - name: active_topology
+    help: If true, record possible Click vrouter nodes as nodes once when agent starts.
+    default: true
+    type: boolean
 method: 
   - name: startCollection
     help: Start collecting routes from this node.

@@ -21,3 +21,22 @@ variables:
      help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed and configured on the machine.
 software:
    - curl 
+method:
+   - name: increaseTraffic
+     help: Increase HTTP traffic
+     args:
+       - name: stepsize
+         type: distribution
+         help: The amount to increase the traffic
+   - name: reduceTraffic
+     help: Reduce HTTP traffic
+     args:
+       - name: stepsize
+         type: distribution
+         help: The amount to reduce the traffic
+   - name: changeTraffic
+     help: Change the HTTP client traffic, randomly. 
+     args:
+       - name: stepsize
+         type: distribution
+         help: The amount to change the traffic, if changed.

@@ -4,3 +4,21 @@ display: runproc
 description: Runs a process via the command line. 
 mainfile: runproc.py
 execute: thread
+variables:
+  - name: logfile
+    help: Full path to log output for the process.
+    type: string
+method:
+  - name: run
+    help: Run a command on the node(s).
+    args:
+      - name: cmd
+        help: The command to run on the node(s).
+        type: string
+      - name: blocking
+        help: If true, block the agent until the process is complete, else do not.
+        type: boolean
+        default: false
+  - name: stop
+    help: Stop the process, if running.
+    args: []

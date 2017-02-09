@@ -5,14 +5,22 @@ description: An agent for running mgen. Most of the smarts are in the external c
 execute: thread 
 mainfile: mgen_agent.py
 inherits:
-   - DispatchAgent
+  - DispatchAgent
 variables:
-   - name: config
-     type: string
-     help: Path to the configuration file for the MGEN server. 
-   - name: log
-     type: string
-     help: The stderr and stdout of the MGEN process. 
+  - name: config
+    type: string
+    help: Path to the configuration file for the MGEN server. 
+  - name: log
+    type: string
+    help: The stderr and stdout of the MGEN process. 
+    default: /tmp/mgen.log
 software:
-   - mgen 
-   - g++
+  - mgen 
+  - g++
+method:
+  - name: start
+    help: start MGEN
+    args: []
+  - name: stop
+    help: stop the MGEN processes
+    args: []

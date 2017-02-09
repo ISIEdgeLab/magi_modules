@@ -5,7 +5,29 @@ description: A magi agent which aggregates existing data in the database.
 execute: thread 
 mainfile: data_aggregation_agent.py
 inherits:
-   - ReportingDispatchAgent
+  - ReportingDispatchAgent
 software:
-   - python-pymongo
-   - libdeterdash
+  - python-pymongo
+  - libdeterdash
+variables:
+  - name: aggregation_period
+    help: How often in seconds to aggregate the agent data.
+    default: 1
+    type: integer
+  - name: agent_key
+    help: The name of the agent instance to aggregate.
+    type: string
+  - name: data_key
+    type: string
+    help: The table key that holds the data to be aggregated.
+  - name: node_key
+    help: The table key which holds the name of the host whose data this is.
+    default: host
+    type: string
+method:
+  - name: startCollection
+    help: Start data aggregation
+    args: []
+  - name: stopCollection
+    help: Stop data aggregation
+    args: []

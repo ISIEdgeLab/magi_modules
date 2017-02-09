@@ -1,6 +1,7 @@
 name: apacheserver
 display: Apache Server
 description: An agent to start, stop and config of the apache HTTP server
+magi_version: 1.7
 execute: thread
 mainfile: apache.py
 inherits:
@@ -9,3 +10,11 @@ software:
    - apache2
    - libapache2-mod-wsgi
    - python-flask
+varibles:
+method: 
+  - name: startServer
+    help: Start Apache
+    args: { }
+  - name: stopServer
+    help: Stop Apache
+    args: { }

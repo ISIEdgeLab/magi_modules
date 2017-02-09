@@ -2,6 +2,7 @@ name: clickControl
 display: Click Control
 help:  Allows the adjustment of click controlled paramteres
 description: Controls Click
+magi_version: 1.7
 execute: thread
 mainfile: clickControl.py
 inherits:
