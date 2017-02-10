@@ -1,0 +1,53 @@
+#!/bin/bash
+
+touch /tmp/gstreamer_install_attempted
+
+TMPDIR=$1
+MYDIR=$2
+
+USAGE="$0 TMPDIR FULL_PATH_TO_THIS_SCRIPT"
+
+if [ "$#" -ne 2 ]; then
+	echo "Not given enough arguments"
+	echo $USAGE
+	exit -1
+fi
+
+# This script will be called by MAGI's software install function
+# Prior to this, several software packages will be installed.
+# If you are running this script manually (without MAGI),
+# install the following software packages and run ldconfig first.
+# 
+#   - libffi-dev
+#   - flex
+#   - bison
+#   - libglib2.0-dev
+#   - yasm
+#   - libxv-dev
+#   - libsdl-pango-dev
+#   - libx264-dev
+#   - libmpg123-dev
+#   - libavcodec-dev
+#   - python-gi-dev
+#   - gstreamer_all
+
+if [ ! -d $MYDIR/gstreamer_software ] ; then
+	echo "Cannot find gstreamer software directory."
+	echo "Cannot find gstreamer software directory." > /tmp/gstreamer_install_attempted
+	exit -1
+fi
+
+echo "Running cp $MYDIR/gstreamer_software/* $TMPDIR" > /tmp/gstreamer_install_attempted
+cp $MYDIR/gstreamer_software/* $TMPDIR
+
+for s in orc_0.4.23 gobject-introspection_1.40.0 gstreamer_1.8.1 gst-plugins-base_1.8.1 gst-plugins-good_1.8.1 gst-plugins-bad_1.8.1 gst-plugins-ugly_1.8.1 gst-libav_1.8.1 gst-python_1.8.1 gst-rtsp-server_1.8.1; do 
+	echo "Runing sudo dpkg -i $TMPDIR/${s}-1_amd64.deb" >> /tmp/gstreamer_install_attempted
+	sudo dpkg -i $TMPDIR/${s}-1_amd64.deb 
+	sudo apt-get -y install -f	
+	sudo ldconfig
+	sudo rm $TMPDIR/${s}-1_amd64.deb
+done
+
+sudo apt-get -y install python-setuptools
+sudo easy_install /proj/edgect/magi/modules/gstreamer/RTPGenerator-0.0.1-py2.7.egg 
+
