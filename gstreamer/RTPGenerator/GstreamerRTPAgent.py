@@ -34,6 +34,7 @@ class GstreamerRTPAgent(DispatchAgent):
         #                ]
         self.flows = None
         self.client_args = ''
+        self.server_args = ''
         self.start_port = 5000
         self.logdir = os.path.join('/', 'tmp', 'magi_gstreamer_rtp')
         self.runname = ''       # include this in log file name if given.
@@ -107,7 +108,7 @@ class GstreamerRTPAgent(DispatchAgent):
             if f['client'] == testbed.nodename:
                 cmd = 'RTPgenClient -p {} {}'.format(self.start_port + port_offset, self.client_args)
             elif f['server'] == testbed.nodename:
-                cmd = 'RTPgenServer -p {} -c {}'.format(self.start_port + port_offset, f['client'])
+                cmd = 'RTPgenServer -p {} -c {} {}'.format(self.start_port + port_offset, f['client'], self.server_args)
 
             if cmd:
                 print("Trying command %s" % cmd)
