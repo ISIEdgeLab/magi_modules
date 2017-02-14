@@ -37,7 +37,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
 
     def periodic(self, now):
         if self.active:
-            log.info("running periodic")
+            log.debug("running periodic")
 
             (cpu_p, cpu_j) = self.runtime_info_collector.getCpuUsage()
             la1, la5, la15, latotal = self.runtime_info_collector.getLoadAverage()
@@ -74,7 +74,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
                     'creator': create,
                     'swapper': swapper
                 })
-                log.info('Inserted uptime: {}, users: {}'.format(uptime, ', '.join(users)))
+                log.debug('Inserted uptime: {}, users: {}'.format(uptime, ', '.join(users)))
             except Exception as e:
                 log.debug('error getting users/uptime: {}'.format(e))
 
@@ -124,7 +124,7 @@ class NodeStatsReporter(ReportingDispatchAgent):
                 self.collection.remove({'created': {'$lt': time.time() - (self.recordLimit * self.interval)}})
               
         else:
-            log.info("not active")
+            log.debug("not active")
 
         ret = now + int(self.interval) - time.time()
         return ret if ret > 0 else 0
