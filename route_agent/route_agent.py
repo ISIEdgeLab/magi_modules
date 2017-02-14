@@ -30,7 +30,7 @@ class RouteReportAgent(ReportingDispatchAgent):
         self.interval = 5
         self.truncate = True
         self.recordLimit = 0            # If True, only keep the newest data in the database. 
-        self.active_topology = False    # If True, update the topology as routes shift.
+        self.active_topology = True     # If True, update the topology as routes shift.
                                         # If False, update once during first periodic call.
 
         # do not change these. 
