@@ -1,6 +1,7 @@
 tags
 run.log*
 *.pyc
+*~
 
 # tmp until the gstreamer agent is folded into the repo.
 gstreamer/*
