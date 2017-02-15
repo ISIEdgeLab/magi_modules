@@ -7,13 +7,18 @@ mainfile: pktCountersAgent.py
 software:
     - libdeterdash
 variables:
-    - name: filters
-      help: the list of counters we should be keeping, only effective after startCollection
-      type: countermap
+    # - name: filters
+    #   help: The list of counters we should be keeping, only effective after startCollection. Set to nothing to keep sane defaults.
+    #   type: countermap
 
     - name: interval
       help: how many seconds between samples, integer seconds only, minimum of 1
       type: int
+
+    - name: visualize
+      help: If true, make counters available to visualization applications.
+      type: boolean
+      default: true
 
 method:
     - name: setDefaults

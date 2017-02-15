@@ -216,7 +216,7 @@ class CounterRecorder(ReportingDispatchAgent):
                 {'data_key': 'out_packets', 'display': 'Out Packets', 'unit': 'pkt/sec'},
             ]
             dashboard = DeterDashboard()
-            if dashboard.add_horizon_chart('Packets/Bytes Count', tcname, 'host', units):
+            if dashboard.add_time_plot('Packets/Bytes Count', tcname, 'host', units):
                 log.info('Added packet count data to Deter Dashboard GUI.')
             else:
                 log.error('Error adding packet count data to the Deter Dashboard.')
