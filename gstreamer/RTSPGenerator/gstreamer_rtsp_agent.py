@@ -210,7 +210,7 @@ class GstreamerRTPAgent(DispatchAgent):
         return True
 
 def getAgent(**kwargs):
-    agent = IperfAgent()
+    agent = GstreamerRTPAgent()
     if not agent.setConfiguration(None, **kwargs):
         msg = 'Bad configuration given to agent'
         log.critical(msg)

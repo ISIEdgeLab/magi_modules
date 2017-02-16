@@ -191,10 +191,10 @@ class GstreamerRTPAgent(DispatchAgent):
 
 def getAgent(**kwargs):
     agent = GstreamerRTPAgent()
-    #if not agent.setConfiguration(None, **kwargs):
-    #    msg = 'Bad configuration given to agent'
-    #    log.critical(msg)
-    #    raise(Exception(msg))  # Don't know how else to get Magi's attention here.
+    if not agent.setConfiguration(None, **kwargs):
+        msg = 'Bad configuration given to agent'
+        log.critical(msg)
+        raise(Exception(msg))  # Don't know how else to get Magi's attention here.
 
     return agent
 
