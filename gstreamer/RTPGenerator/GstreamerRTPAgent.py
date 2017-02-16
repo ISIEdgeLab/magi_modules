@@ -103,9 +103,8 @@ class GstreamerRTPAgent(DispatchAgent):
                 
     def startTraffic(self, msg):
         '''Start gstreamer RTP servers/clients.'''
-        if len(self._procs) > 0:
-            log.info('Stopping older gstreamer RTP processes (Found %d).' % (len(self._procs)))
-            self.stopTraffic(msg)
+        #log.info('Stopping older gstreamer RTP processes (Found %d).' % (len(self._procs)))
+        self.stopTraffic(msg)
         
         port_offset = 0    
         log.info("Should start %d flows." % len(self.flows))
@@ -162,15 +161,16 @@ class GstreamerRTPAgent(DispatchAgent):
                     proc.send_signal(signal.SIGINT)
                     sleep(1)
                 except OSError:
-                    pass # uh, do something?
+                    pass # ok
                 try:
                     log.info('killing gstreamer RTP')
                     proc.kill()
+                    sleep(1)
                     if proc.poll():
                         self._procs.remove(proc)
                 except OSError as e:
-                    log.warn("Error while killing proc %s" % (e))
-                    pass   # meh.
+                    log.warn("Error while killing proc %s (No such process errors are probably ok)" % (e))
+                    pass   # fine.
         if len(self._procs) > 0:
             log.warn("Failed to kill %d processes." % (len(self._procs)))
         else:
@@ -181,8 +181,8 @@ class GstreamerRTPAgent(DispatchAgent):
         # Just to be safe. 
         try:
             log.info('pkilling gstreamer RTP')
-            call('pkill -f "RTPgenClient"'.split(), shell=True)
-            call('pkill -f "RTPgenServer"'.split(), shell=True)
+            call('pkill -f RTPgenClient'.split())
+            call('pkill -f RTPgenServer'.split())
         except CalledProcessError as e:
             log.info('error pkilling gstreamer RTP: {}'.format(e))
             pass
