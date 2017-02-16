@@ -159,11 +159,9 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
 
 def getAgent(**kwargs):
     agent = GstreamerRTPAgentViz()
-    # Not all AALs use agent initiation to set configurations, 
-    # and instead define options in the event streams, and then
-    # explicitly calling setConfiguration.
-    # So for now, we don't check our config on instantiation.
-    #agent.setConfiguration(None, **kwargs)
+    if agent:
+        agent.setConfiguration(None, **kwargs)
+
     return agent
 
 if __name__ == "__main__":
