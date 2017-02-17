@@ -181,6 +181,9 @@ class GstreamerRTPAgent(DispatchAgent):
         # Just to be safe. 
         try:
             log.info('pkilling gstreamer RTP')
+            call('pkill -signal 6 -f RTPgenClient'.split())
+            call('pkill -signal 6 -f RTPgenServer'.split())
+            sleep(1)
             call('pkill -f RTPgenClient'.split())
             call('pkill -f RTPgenServer'.split())
         except CalledProcessError as e:
