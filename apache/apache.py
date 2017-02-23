@@ -33,7 +33,7 @@ class ApacheAgent(SharedServer):
             raise ApacheAgentException('Unsupported OS: {}'.format(dist))
 
         maj = int(dist[1].split('.')[0])
-        if not 12 <= maj <= 14:
+        if not 12 <= maj <= 16:
             raise ApacheAgentException('Unsupported Ubuntu Version: {}'.format(maj))
 
         self.configure()
@@ -56,12 +56,16 @@ class ApacheAgent(SharedServer):
     def configure(self):
         # create and enable our site.
         cwd = os.path.dirname(__file__)
+        # Apache 2.2 wants no ".conf" while 2.4+ does. So give both.
         shutil.copyfile(os.path.join(cwd, 'traffic_gen'),
                         '/etc/apache2/sites-available/traffic_gen')
+        shutil.copyfile(os.path.join(cwd, 'traffic_gen'),
+                        '/etc/apache2/sites-available/traffic_gen.conf')
 
         # Have apache use our site and remove the default one.
         run('a2ensite traffic_gen')
         run('a2dissite default')
+        run('a2dissite 000-default')
 
         # create the WSGI site itself.
         sitedir = '/var/www/traffic_gen'
