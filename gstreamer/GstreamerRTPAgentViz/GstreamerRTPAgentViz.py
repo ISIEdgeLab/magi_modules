@@ -50,7 +50,7 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
         if self.active:
             if not self._db_configured:
                 self._configure_database()
-            log.info("Calling progress metric.")
+            #log.info("Calling progress metric.")
             self._check_files()
         #else:
         #    log.info("Not reporting.")
@@ -73,7 +73,6 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
             # If this file's been modified in the last self.watch_range, we should check this file.
             if mt_time + (self.watch_range * 60) >= now and file not in self._watched_files:
             #if file not in self._watched_files:
-                log.info("Adding %s to list of watched files." % file)
                 fi = FileInfo()
                 try:
                     fi.fd = open(os.path.join(self.dir_to_check, file), 'r')
@@ -81,6 +80,7 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
                     fi.fd.seek(0, 2)
                     fi.file_name = file
                     self._watched_files[file] = fi
+                    log.info("Added %s to list of watched files." % file)
                 except Exception as e:
                     log.warn("Problem reading from %s/%s: %s" % (self.dir_to_check,f, e))
                     del fi
@@ -91,9 +91,9 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
         try:
             for file in self._watched_files:
                 x=x+1
-                log.info("Watching %s" % self._watched_files[file].file_name)
+                #log.info("Watching %s" % self._watched_files[file].file_name)
                 if self._watched_files[file].fd != None:
-                    log.info("Have opened %s" % self._watched_files[file].file_name)
+                    #log.info("Have opened %s" % self._watched_files[file].file_name)
                     try:
                         line = None
                         line = self._watched_files[file].fd.readline()
