@@ -27,11 +27,11 @@ variables:
      default: False
      help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed and configured on the machine.
 method: 
-  - name: startCollection
-    help: Start creating HTTP curl client traffic
+  - name: startClient
+    help: Start the client, thus creating HTTP traffic.
     args: { }
-  - name: stopCollection
-    help: Stop creating HTTP curl client traffic
+  - name: stopClient
+    help: Stop the client, thus stopping the HTTP traffic.
     args: { }
   - name: increaseTraffic
     help: Whatever the traffic size for a fetch will be, add the given size to it.
