@@ -226,7 +226,15 @@ class RouteData(object):
             return self._clickGraph.get_network_edge_map()
 
         return None
-        
+
+    def init_visualization(self, dash, agent):
+        if self._clickGraph:
+            self._clickGraph.init_visualization(dash, agent)
+    
+    def insert_stats(self, collection):
+        if self._clickGraph:
+            self._clickGraph.insert_stats(collection)
+
 if __name__ == "__main__":
     from sys import argv
     import pprint
