@@ -1,0 +1,29 @@
+streamstarts: [monitor]
+
+groups:
+  tcpdump_group: [ct1]
+
+agents:
+  tcpdump_agent:
+    group: tcpdump_group
+    path: /users/glawler/src/edgect_magi_modules/tcpdump
+    execargs: {destination: server1}
+
+eventstreams:
+  monitor:
+  - type: event
+    agent: tcpdump_agent
+    method: startCollection
+    args: {}
+
+  - type: trigger
+    triggers: [{timeout: 10000}]
+
+  - type: event
+    agent: tcpdump_agent
+    method: stopCollection
+    trigger: collectionStopped 
+    args: {}
+
+  - type: trigger
+    triggers: [ {event: collectionStopped, target: exit} ] 

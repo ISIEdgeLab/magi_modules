@@ -1,0 +1,23 @@
+name: tcpdump
+magi_version: 1.7
+display: A TCP Dump agent.
+description: tcpdump
+mainfile: tcpdump.py
+execute: thread 
+inherits:
+    - DispatchAgent
+varibles:
+    - name: dumpfile
+      help: Path to the file in which to write the tcp packets.
+      default: /tmp/tcpdump.cap
+    - name: destination
+      type: nodelist
+      help: The destination to dump traffic to on the given host.
+method:
+    - name: startCollection
+      help: Start collecting TCP dump information.
+      args: {}
+    - name: stopCollection
+      help: Stop collecting TCP dump information.
+      args: {}
+    
