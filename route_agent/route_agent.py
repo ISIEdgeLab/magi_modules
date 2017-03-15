@@ -70,6 +70,9 @@ class RouteReportAgent(ReportingDispatchAgent):
             # handle updates to topology and network edges.
             self._update_topology()
             self._update_network_edges()
+
+            # just let the route data update the db directly if it wants to.
+            self._routeData.insert_stats(self._collection)
             
         ret = now + int(self.interval) - time.time()
         return ret if ret > 0 else 0
@@ -100,8 +103,8 @@ class RouteReportAgent(ReportingDispatchAgent):
             dashboard = DeterDashboard()
             # these, ugh, hard coded values can be found in self._update_topology. 
             dashboard.add_topology('Routing', self.name, 'nodes', 'edges',
-                                   template='force_graph_routes.html', 
                                    extra_keys={'table_type': 'topology'})
+            self._routeData.init_visualization(dashboard, self.name)
             self._viz_configured = True
 
         # return True so that any defined trigger gets sent back to the orchestrator

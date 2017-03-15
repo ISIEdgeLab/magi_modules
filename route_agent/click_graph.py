@@ -37,6 +37,7 @@ class ClickNode(object):
         self.node_class = None
         self.config = []
         self.table = []
+        self.values = {}   # Generic name/value pairs found in click node configurations.
 
     def parse(self, attr, lines):
         '''Given a list of text lines and an attribute name, parse and set teh attribute on this instance. 
@@ -51,7 +52,7 @@ class ClickNode(object):
         elif attr == 'table':
            self._parse_table(lines)
         else:
-            raise ClickGraphException('bad attr given to ClickNode: {}'.format(attr))
+            self.values[attr] = lines[0]    # ...or do we want to write all data?
 
     def _parse_table(self, lines):
         '''Each entry in the table is a route with dst, gw, port, and link. 
@@ -220,6 +221,14 @@ class ClickGraph(object):
         self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
 
         self._known_hosts = None
+
+        self.link_stat_units = [
+                {'data_key': 'bandwidth', 'display': 'Bandwidth', 'unit': 'bytes/second'},
+                {'data_key': 'latency', 'display': 'Latency', 'unit': 'ms'},
+                {'data_key': 'drops', 'display': 'Packet Drops', 'unit': 'number'},
+                {'data_key': 'drop_prob', 'display': 'Drop Probability', 'unit': '%'},
+                {'data_key': 'capacity', 'display': 'Link Capacity', 'unit': 'ask Erik'}
+            ]
 
     def set_known_hosts(self, kh):
         self._known_hosts = kh
@@ -397,9 +406,13 @@ class ClickGraph(object):
         log.debug('click handles: {}'.format(handles))
         for handle in handles:
             n = ClickNode()
-            for f in ['class', 'name', 'table', 'config']:
+            entries = ['class', 'name', 'table', 'config',      # standard.
+                       'bandwidth', 'latency', 'drop_prob',     # various stats.
+                       'drops', 'capacity']
+            for f in entries:
                 lines = p.get_value('{}.{}'.format(handle, f))
-                n.parse(f, lines)
+                if lines:
+                    n.parse(f, lines)
 
             # we keep the properties of the node in "data" rather than make ClickNode hashable. Dunno why.
             self._click_graph.add_node(n.name, data=n)
@@ -472,6 +485,28 @@ class ClickGraph(object):
 
         return therest
 
+    def _find_links_to_class(self, node, nbrs, node_classes):
+        # given a node and a nbr, search that subtree for the single node of class 'node_class'
+        # and return the link chain to the node of that class.
+        # aka: find the click nodes between routers = given a router name, find the click node names
+        # between that router and whichever router is in this subtree.
+        if nbrs[-1] == node:
+            return None   # loop
+
+        node_data = self._click_graph.node[nbrs[-1]]['data']
+        if node_data.node_class in node_classes:
+            log.debug("found end of chain: {}".format(nbrs[-1]))
+            # found it, collapse recursion.
+            return nbrs
+        
+        for next_nbr in self._click_graph.successors(nbrs[-1]):
+            log.debug('{} Looking {} -> {}'.format(node, nbrs[-1], next_nbr))
+            links = self._find_links_to_class(node, nbrs + [next_nbr], node_classes)
+            if links:
+                return links
+
+        return None
+
     def _get_router_nbrs(self, node):
         '''
         get a list of routers that this node is connected to via a chain of edges.
@@ -500,6 +535,50 @@ class ClickGraph(object):
                 router_nbrs.append({'name': name, 'frm': frm, 'to': to})
 
         return router_nbrs
+
+    def init_visualization(self, dash, agent):
+        dash.add_link_annotation('Click Configuration', agent, 'edge', self.link_stat_units)
+
+    def _get_stats(self):
+        # Iterate over the click graph, grabbing the newest stats/units. We
+        # attach the stats to the routers though and not the click graph nodes
+        # so we need to iterate from the router graph as well.
+        stats = {}
+        router_nodes = [n for n in self._router_graph.nodes() if n in self._click_graph]
+        for node in router_nodes:
+            # for each router, traverse it's subtree collecting stats.
+            for nbr in self._click_graph.neighbors(node):
+                chain = self._find_links_to_class(node, [nbr], [self._router_class])
+                log.debug('{} -> {} chain: {}'.format(node, nbr, chain))
+                if not chain:
+                    continue    # chain that does not go to another router. toh, or loops around.
+
+                for click_node_name in chain:
+                    # see if this click node has stats we're looking for.
+                    click_node_data = self._click_graph.node[click_node_name]['data']
+                    link = '["{}","{}"]'.format(node, chain[-1]) # we encode the link as mongo and JSON don't 
+                                                             # do tuples. stupid, but true.
+                    for stat in self.link_stat_units:
+                        if stat['data_key'] in click_node_data.values:
+                            if not link in stats:
+                                stats[link] = {}
+
+                            # i.e. stats["[router1,router4]"]['bandwidth'] = 1250000 
+                            # hashtag ugh.
+                            stats[link][stat['data_key']] = click_node_data.values[stat['data_key']]
+
+        return stats
+
+    def insert_stats(self, collection):
+        click_stats = self._get_stats()
+        log.info('inserting {} stats into the db.'.format(len(click_stats)))
+        for link, stats in click_stats.iteritems():
+            # stats is a list of dicts. the dict entry looks like:
+            #       (nodeA, nodeB) : {stat_key: stat_value, stat_key: stat_value, ...}
+            # the key is a directed link from nodeA to nodeB. The "stat_key"s are values
+            # which match the units in self.link_stat_units.
+            for unit_key, unit_value in stats.iteritems():
+                collection.insert({'edge': link, unit_key: unit_value})
 
     def __repr__(self):
         return '{}\nTree: {}\n{}\nTree: {}'.format(
@@ -581,9 +660,22 @@ if __name__ == "__main__":
             print('\t{} connects to click node {} (on {}) via link {} '.format(
                 node, e['nbr'], e['nbr_host'], e['to_link']))
 
-    import matplotlib as mpl
-    mpl.use('Agg')
-    import matplotlib.pyplot as plt
-    from networkx.drawing.nx_pydot import write_dot
-    draw_graph(cg._router_graph)
-    draw_graph(cg._click_graph)
+    print('Current configuration:')
+    stats = cg._get_stats()
+    print('{}\n\n'.format(stats))
+    key = stats.keys()[0]
+    print('"stats" for {} : {}'.format(key, stats[key]))
+    key = (key[1], key[0])
+    print('"stats" for {} : {}'.format(key, stats[key]))
+    key = stats.keys()[-1]
+    print('"stats" for {} : {}'.format(key, stats[key]))
+    key = (key[1], key[0])
+    print('"stats" for {} : {}'.format(key, stats[key]))
+
+    if '-o' in argv:
+        import matplotlib as mpl
+        mpl.use('Agg')
+        import matplotlib.pyplot as plt
+        from networkx.drawing.nx_pydot import write_dot
+        draw_graph(cg._router_graph)
+        draw_graph(cg._click_graph)
