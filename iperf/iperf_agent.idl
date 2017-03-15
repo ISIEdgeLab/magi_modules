@@ -10,7 +10,7 @@ software:
   - iperf3 
 variables:
   - name: flows
-    help: This is a list of client to server pairs, in python dict format with 'client' and ;'server' keys. Example: "[{'client': 'foo' 'server': 'baz'}, {'client': 'bar' 'server': 'koala'}]"
+    help: "This is a list of client to server pairs, in python dict format with 'client' and ;'server' keys. Example: [{'client': 'foo' 'server': 'baz'}, {'client': 'bar' 'server': 'koala'}]"
     type: string
   - name: client_args
     help:
