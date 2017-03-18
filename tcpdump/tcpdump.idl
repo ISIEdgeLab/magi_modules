@@ -7,13 +7,17 @@ execute: thread
 inherits:
     - DispatchAgent
 varibles:
+    - name: dumpfile
+      help: Default dump file location. Can be overridden during the startCollection() call.
+      type: str
+      default: "/tmp/tcpdump.cap"
 method:
     - name: startCollection
       help: Start collecting TCP dump information.
       args:
         - name: dumpfile
-          help: Path to the file in which to write the tcp packets.
-          default: /tmp/tcpdump.cap
+          help: Path to the file in which to write the tcp packets. This is optional as there is a default.
+          default: "/tmp/tcpdump.cap"
         - name: expression
           type: str
           help: The expression passed to tcpdump. e.g. "dst foobar" or "src 10.0.1.1 proto udp"
@@ -28,4 +32,7 @@ method:
       args:
         - name: archivepath
           help: The path to the archive directory. It will be created if it does not exist. This should probably be a shared or NFS mounted directory so all files from all agents will be written to one directory.
+          type: str
+        - name: dumpfile
+          help: The location of the tcpdump cature file to copy. Optional if defaults are used. 
           type: str
