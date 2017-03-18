@@ -7,17 +7,25 @@ execute: thread
 inherits:
     - DispatchAgent
 varibles:
-    - name: dumpfile
-      help: Path to the file in which to write the tcp packets.
-      default: /tmp/tcpdump.cap
-    - name: destination
-      type: nodelist
-      help: The destination to dump traffic to on the given host.
 method:
     - name: startCollection
       help: Start collecting TCP dump information.
-      args: {}
+      args:
+        - name: dumpfile
+          help: Path to the file in which to write the tcp packets.
+          default: /tmp/tcpdump.cap
+        - name: expression
+          type: str
+          help: The expression passed to tcpdump. e.g. "dst foobar" or "src 10.0.1.1 proto udp"
+        - name: tcpdump_args
+          help: extra, non-expression args, to pass to the tcpdump process when starting.
+          type: str
     - name: stopCollection
       help: Stop collecting TCP dump information.
       args: {}
-    
+    - name: archiveDump
+      help: Write the tpcdump file to the given path/directory. The file will be uniquely named based on the host and agent name from which the file comes.
+      args:
+        - name: archivepath
+          help: The path to the archive directory. It will be created if it does not exist. This should probably be a shared or NFS mounted directory so all files from all agents will be written to one directory.
+          type: str

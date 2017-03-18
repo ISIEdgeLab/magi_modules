@@ -1,29 +1,38 @@
 streamstarts: [monitor]
 
 groups:
-  tcpdump_group: [ct1]
+  tcpdump_group: [ct1, ct2, ct3]
 
 agents:
   tcpdump_agent:
     group: tcpdump_group
     path: /users/glawler/src/edgect_magi_modules/tcpdump
-    execargs: {destination: server1}
-
+    execargs: {}
+      
 eventstreams:
   monitor:
-  - type: event
-    agent: tcpdump_agent
-    method: startCollection
-    args: {}
-
-  - type: trigger
-    triggers: [{timeout: 10000}]
-
-  - type: event
-    agent: tcpdump_agent
-    method: stopCollection
-    trigger: collectionStopped 
-    args: {}
-
-  - type: trigger
-    triggers: [ {event: collectionStopped, target: exit} ] 
+    - type: event
+      agent: tcpdump_agent
+      method: startCollection
+      args: { expression: 'host server1' }
+  
+    - type: trigger
+      triggers: [{timeout: 60000}]
+  
+    - type: event
+      agent: tcpdump_agent
+      method: stopCollection
+      trigger: dumpStopped 
+      args: {}
+  
+    - type: trigger
+      triggers: [{event: dumpStopped}] 
+  
+    - type: event
+      agent: tcpdump_agent
+      trigger: filesCopied
+      method: archiveDump
+      args: { archivepath: /zfs/edgelab/glawler/tcpdumps }
+  
+    - type: trigger
+      triggers: [ {event: filesCopied} ] 
