@@ -92,19 +92,18 @@ class ClickConfigParser(object):
         if not os.path.isdir(self._confpath):
             self._socket = self._open_control_socket(confpath)
             self._read = self._read_socket
-            self._write = self.set_value
+            self._write = self._write_socket
         else:
             self._read = self._read_file
-            self._write = self.set_value
+            self._write = self._write_file
 
     def get_value(self, key):
         '''Given the path or API message, return the value in the file or API response.'''
         # the only difference between proc and socket API is the delimiter char: '/' or '.' 
         return self._read(key)
 
-    def set_value(self, key):
-        click_except('set_value() not yet implemented.')
-        pass
+    def set_value(self, key, value):
+        return self._write(key, value)
 
     def _read_socket(self, key):
         '''Send msg to the connected click control socket and return the parsed response.'''
@@ -198,6 +197,23 @@ class ClickConfigParser(object):
             click_except('Error in click control protocol.')
 
         return s
+
+    def _write_socket(self, key, value):
+        pass
+
+    def _write_file(self, key, value):
+        subpath = key.replace('.', os.sep)
+        path = os.path.join(self._confpath, subpath)
+        try: 
+            log.debug('writing value "{}" to file {}'.format(value, path))
+            with open(path, 'w') as fd:
+                fd.write(value)
+        except IOError as e:
+            log.critical('Unable to write to file.')
+            return False
+
+        return True
+
 
 class ClickGraph(object):
     """
@@ -569,6 +585,28 @@ class ClickGraph(object):
 
         return stats
 
+    def get_router_click_chain(self, node_a, node_b):
+        for nbr in self._click_graph.neighbors(node_a):
+            chain = self._find_links_to_class(node_a, [nbr], [self._router_class])
+            if chain:
+                if chain[-1] == node_b:
+                    return chain
+
+        return None
+
+    def set_config(self, node_a, node_b, key, value):
+        chain = self.get_router_click_chain(node_a, node_b)
+        if not chain:
+            log.error('Unable to traverse click links between {} and {}.'.format(node_a, node_b))
+            return False
+
+        for click_node in chain:
+            if key in self._click_graph.node[click_node]['data'].values:
+                ccp = ClickConfigParser(self._confpath)
+                # key here is teh "path" to the value to set. In this case click_node.key
+                ccp.set_value('{}.{}'.format(click_node, key), value)
+                return True
+
     def insert_stats(self, collection):
         click_stats = self._get_stats()
         log.info('inserting {} stats into the db.'.format(len(click_stats)))
@@ -661,16 +699,15 @@ if __name__ == "__main__":
                 node, e['nbr'], e['nbr_host'], e['to_link']))
 
     print('Current configuration:')
+    import json   # keys are in JSON for not good reasons. 
     stats = cg._get_stats()
     print('{}\n\n'.format(stats))
     key = stats.keys()[0]
-    print('"stats" for {} : {}'.format(key, stats[key]))
-    key = (key[1], key[0])
-    print('"stats" for {} : {}'.format(key, stats[key]))
+    nodes = json.loads(key)
+    print('"stats" for {} : {}'.format(nodes, stats[key]))
     key = stats.keys()[-1]
-    print('"stats" for {} : {}'.format(key, stats[key]))
-    key = (key[1], key[0])
-    print('"stats" for {} : {}'.format(key, stats[key]))
+    nodes = json.loads(key)
+    print('"stats" for {} : {}'.format(nodes, stats[key]))
 
     if '-o' in argv:
         import matplotlib as mpl
@@ -679,3 +716,5 @@ if __name__ == "__main__":
         from networkx.drawing.nx_pydot import write_dot
         draw_graph(cg._router_graph)
         draw_graph(cg._click_graph)
+
+    cg.set_config('router4', 'router3', 'latency', '500ms')
