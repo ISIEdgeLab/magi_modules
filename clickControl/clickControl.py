@@ -10,6 +10,8 @@ import time, ast, threading
 import netifaces as ni
 import networkx as nx
 
+from subprocess import Popen
+
 import clickGraph
 from pymongo import MongoClient
 from magi.util.agent import agentmethod, DispatchAgent
@@ -36,7 +38,6 @@ class clickControlAgent(DispatchAgent):
         self.click_config = "/tmp/vrouter.click"
         self.UDPRunning = False
         self.isFlapping = False
-        self.inKernel = False  # if True, run in kernel mode when starting click.
 
         self.cg = clickGraph.clickGraph(self.click_config)
         # assumes clicks installed, should we install?
@@ -45,14 +46,14 @@ class clickControlAgent(DispatchAgent):
         self._confPath = '/click'   # handle to click's runtime configuration.
         
     @agentmethod()
-    def startClick(self, msg):
+    def startClick(self, msg, userMode=True):
         click_running = False
         # Check if click configuration exists      
         if not os.path.isfile(self.click_config):
             self.log.error("Click: no such configuration file %s" % self.click_config)
             return False
        
-        if self.inKernel:
+        if not userMode:
             # Check if the module is loaded.  If so, uninstall click first and reinstall
             (output, err) = execl.execAndRead("lsmod")
             if err != "":
@@ -75,26 +76,35 @@ class clickControlAgent(DispatchAgent):
                 return False
 
         else:  # not in kernel - does not daemonize itself, so we handle it as a proc.
-            self._clickProc = Popen('sudo click {} -u /click'.format(self.click_config).split())
+            cmd = 'click {} -u /click'.format(self.click_config)
+            self.log.info('Running cmd: {}'.format(cmd))
+            self._clickProc = Popen(cmd.split())
+            time.sleep(1)   # give it sec to fail...
             if self._clickProc.poll():
-                self.log.error("Error starting click in user space.")
+                self.log.error("Error starting click in user space. exit={}".format(self._clickProc.poll()))
                 self._clickProc = None
                 return False
+
+            self.log.info('user space click started. pid={}'.format(self._clickProc.pid))
 
         return True
         
         
     @agentmethod()
     def stopClick(self, msg):
-        if self.inKernel:
+        if not self._clickProc:
             (output, err) = execl.execAndRead("sudo click-uninstall")
             if err != "":
                 self.log.error("Click: %s" % err)
                 return False
+
+            os.rmdir('/click')   # process does not clean up the soket when killed.
+
         else:
-            if self._clickProc:
-                self._clickProc.kill()
-                self._clickProc.wait()   # GTL may not want this.
+            self._clickProc.kill()
+            self._clickProc.wait()   # GTL may not want this.
+            self._clickProc = None
+            os.remove('/click')   # process does not clean up the soket when killed.
 
         return True
         
