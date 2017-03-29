@@ -18,6 +18,7 @@ import netifaces as ni
 from networkx.readwrite import json_graph
 
 from magi.testbed import testbed   # only used for phy node name. If possible, remove this dependency.
+from click_config_parser import ClickConfigParser
 
 import logging
 
@@ -80,141 +81,6 @@ class ClickNode(object):
     def __repr__(self):
         return '{}/{}'.format(self.name, self.node_class)
 
-
-class ClickConfigParser(object):
-    '''
-        Given a path to click configuration, extract queried data. Supports proc-like fs and unix socket API.
-    '''
-    def __init__(self, confpath='/click'):
-        super(ClickConfigParser, self).__init__()
-        self._confpath = confpath
-
-        if not os.path.isdir(self._confpath):
-            self._socket = self._open_control_socket(confpath)
-            self._read = self._read_socket
-            self._write = self._write_socket
-        else:
-            self._read = self._read_file
-            self._write = self._write_file
-
-    def get_value(self, key):
-        '''Given the path or API message, return the value in the file or API response.'''
-        # the only difference between proc and socket API is the delimiter char: '/' or '.' 
-        return self._read(key)
-
-    def set_value(self, key, value):
-        return self._write(key, value)
-
-    def _read_socket(self, key):
-        '''Send msg to the connected click control socket and return the parsed response.'''
-        # for protocol details see: http://read.cs.ucla.edu/click/elements/controlsocket
-        # Basic protocol response is like:
-        # XXX: <msg>
-        # DATA NNN
-        # ...
-        # Where XXX is 200 success; not 200 error and NNN is len of DATA in bytes.
-        msg = key.replace(os.sep, '.')
-        self._socket.sendall('READ ' + msg + '\r\n')   # CRLF is expected.
-        datasize = self._read_socket_response(self._socket)
-        if datasize > 0:
-            log.debug('reading {} bytes'.format(datasize))
-            buf = self._socket.recv(datasize)
-            # Not sure why, but "list" puts the number of items first. So remove that
-            # if this is a 'list' command.
-            lines = [t for t in buf.split('\n') if t]  # remove empty lines and split on \n
-            if msg.lower() == 'list':
-                return lines[1:]
-            return lines
-
-        return []
-
-    def _read_socket_response(self, s):
-        '''Read the click response. Return response and amounf of data to read.'''
-        def _readline(s):
-            buf = ''
-            while True:
-                c = s.recv(1)
-                if c == '\r':
-                    c = s.recv(1)
-                    if c == '\n':
-                        break
-                
-                buf += c
-            return buf
-
-        resp_line = _readline(s)
-        code, _ = resp_line.split(' ', 1)
-        if code != '200':
-            return -1
-
-        line = _readline(s)
-        _, bytecnt = line.split()
-        try:
-            int(bytecnt)
-        except TypeError:
-            return -1
-
-        return int(bytecnt)
-
-    def _read_file(self, key):
-        subpath = key.replace('.', os.sep)   # . --> / 
-        path = os.path.join(self._confpath, subpath)
-        lines = []
-        try:
-            log.debug('Reading file {}'.format(path))
-            with open(path, 'r') as fd:
-                lines = [l.strip() for l in fd.readlines()]
-                # Not sure why, but "list" puts the number of items first. So remove that
-                # if this is a 'list' command.
-                if key.lower() == 'list':
-                    lines = lines[1:]
-        except IOError as e:
-            log.warn('Error opening file: {}. Path built from key {}.'.format(path, key))
-            # not an error. some nodes don't have all keys.
-
-        return lines
-
-    def _open_control_socket(self, path):
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.connect(path)
-        except Exception as e:
-            click_except('Unable to open click control UNIX socket {}: {}'.format(self._confpath, e))
-
-        s.settimeout(1)  # should be very quick as it's local.
-
-        # read proto header and version.
-        buf = s.recv(64)
-        # should be like "Click::ControlSocket/1.3"
-        if not buf.startswith('Click::ControlSocket'):
-            click_except('Bad protocol on click control socket, exiting.')
-
-        try:
-            _, v = buf.strip().split('/')
-            if float(v) < 1.3:
-                click_except('Click control protocol too old at {}'.format(v))
-        except (ValueError, TypeError):
-            click_except('Error in click control protocol.')
-
-        return s
-
-    def _write_socket(self, key, value):
-        pass
-
-    def _write_file(self, key, value):
-        subpath = key.replace('.', os.sep)
-        path = os.path.join(self._confpath, subpath)
-        try: 
-            log.debug('writing value "{}" to file {}'.format(value, path))
-            with open(path, 'w') as fd:
-                fd.write(value)
-        except IOError as e:
-            log.critical('Unable to write to file.')
-            return False
-
-        return True
-
-
 class ClickGraph(object):
     """
     Represent the topology graph and various bits. Read the live /click dir for initial graph configuration and
@@ -230,11 +96,7 @@ class ClickGraph(object):
         self._physical_class = 'ToDevice'       # anything of this class is a link to a NIC and a physical node.
         self._localhost_class = 'ToHost'        # anything of this class points to the localhost.
 
-        self._click_graph = nx.DiGraph(name='click')    # This is the "full" click graph built from /click.
-        self._build_click_graph(self._confpath)
-
-        self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node subgraph.
-        self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
+        self._build_graphs()
 
         self._known_hosts = None
 
@@ -245,6 +107,13 @@ class ClickGraph(object):
                 {'data_key': 'drop_prob', 'display': 'Drop Probability', 'unit': '%'},
                 {'data_key': 'capacity', 'display': 'Link Capacity', 'unit': 'ask Erik'}
             ]
+
+    def _build_graphs(self):
+        self._click_graph = nx.DiGraph(name='click')    # This is the "full" click graph built from /click.
+        self._build_click_graph(self._confpath)
+
+        self._router_graph = nx.DiGraph(name='routers') # This is the router + physical node subgraph.
+        self._build_router_graph_from_click_graph()     # the router graph is built from the existing /click graph.
 
     def set_known_hosts(self, kh):
         self._known_hosts = kh
@@ -417,27 +286,22 @@ class ClickGraph(object):
 
     def _build_click_graph(self, confpath):
         '''Build a click graph given a configuration.'''
-        p = ClickConfigParser(confpath)
-        handles = p.get_value('list')
-        log.debug('click handles: {}'.format(handles))
-        for handle in handles:
+        p = ClickConfigParser()
+        p.parse()
+        conf = p.get_configuration()
+        log.debug('click nodes: {}'.format(conf.keys()))
+        for node, values in conf.iteritems():
             n = ClickNode()
-            entries = ['class', 'name', 'table', 'config',      # standard.
-                       'bandwidth', 'latency', 'drop_prob',     # various stats.
-                       'drops', 'capacity']
-            for f in entries:
-                lines = p.get_value('{}.{}'.format(handle, f))
-                if lines:
-                    n.parse(f, lines)
+            for key, values in values.iteritems():
+                n.parse(key, values['lines'])
 
             # we keep the properties of the node in "data" rather than make ClickNode hashable. Dunno why.
             self._click_graph.add_node(n.name, data=n)
 
         # now all the nodes are built. Use the ports file to build the graph.
-        for handle in handles:
-            lines = p.get_value('{}.{}'.format(handle, 'ports'))
-            if lines:
-                self._add_click_port_edges(handle, lines)
+        for node, values in conf.iteritems():
+            if 'ports' in values:
+                self._add_click_port_edges(node, values['ports']['lines'])
 
     def _add_click_port_edges(self, handle, lines):
         output_mode = False
@@ -559,6 +423,10 @@ class ClickGraph(object):
         # Iterate over the click graph, grabbing the newest stats/units. We
         # attach the stats to the routers though and not the click graph nodes
         # so we need to iterate from the router graph as well.
+
+        # rebuild the world to get possibly updated stats.
+        self._build_graphs()
+
         stats = {}
         router_nodes = [n for n in self._router_graph.nodes() if n in self._click_graph]
         for node in router_nodes:
@@ -602,9 +470,9 @@ class ClickGraph(object):
 
         for click_node in chain:
             if key in self._click_graph.node[click_node]['data'].values:
-                ccp = ClickConfigParser(self._confpath)
-                # key here is teh "path" to the value to set. In this case click_node.key
-                ccp.set_value('{}.{}'.format(click_node, key), value)
+                ccp = ClickConfigParser()
+                ccp.parse(self._confpath)
+                ccp.set_value(click_node, key, value)
                 return True
 
     def insert_stats(self, collection):
@@ -683,9 +551,9 @@ if __name__ == "__main__":
     print(nx.info(cg._router_graph))
 
     dump_router_nbrs(cg, 'router1')
-    dump_router_nbrs(cg, 'router7')
-    dump_router_nbrs(cg, 'router8')
-    dump_router_nbrs(cg, 'router9')
+    # dump_router_nbrs(cg, 'router7')
+    # dump_router_nbrs(cg, 'router8')
+    # dump_router_nbrs(cg, 'router9')
 
     dump_rtable(cg, 'router1')
     dump_rtable(cg, 'router1', tohosts=['10.3.1.1', '10.2.1.1', '10.1.1.1'])
@@ -717,4 +585,4 @@ if __name__ == "__main__":
         draw_graph(cg._router_graph)
         draw_graph(cg._click_graph)
 
-    cg.set_config('router4', 'router3', 'latency', '500ms')
+    cg.set_config('router4', 'router1', 'latency', '500ms')
