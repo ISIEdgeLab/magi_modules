@@ -44,7 +44,11 @@ class clickControlAgent(DispatchAgent):
 
         self._clickProc = None
         self._confPath = '/click'   # handle to click's runtime configuration.
-        
+
+    @agentmethod()
+    def updateVisualization(self, msg):
+        return True
+
     @agentmethod()
     def startClick(self, msg, userMode=True):
         click_running = False
