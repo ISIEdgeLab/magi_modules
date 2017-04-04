@@ -4,6 +4,8 @@ display: A TCP Dump agent.
 description: tcpdump
 mainfile: tcpdump.py
 execute: thread 
+software:
+    - python-netifaces
 inherits:
     - DispatchAgent
 varibles:
@@ -23,6 +25,9 @@ method:
           help: The expression passed to tcpdump. e.g. "dst foobar" or "src 10.0.1.1 proto udp"
         - name: tcpdump_args
           help: extra, non-expression args, to pass to the tcpdump process when starting.
+          type: str
+        - name: capture_address
+          help: If given, capture on the interface which has this address. 
           type: str
     - name: stopCollection
       help: Stop collecting TCP dump information.

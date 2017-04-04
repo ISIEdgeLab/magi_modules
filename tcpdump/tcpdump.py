@@ -9,6 +9,8 @@ from magi.util.agent import agentmethod, DispatchAgent
 from magi.util.processAgent import initializeProcessAgent
 from subprocess import Popen
 from subprocess import STDOUT
+from netifaces import interfaces, ifaddresses
+from socket import AF_INET
 
 from os.path import exists, isdir, basename, join as path_join
 from os import makedirs
@@ -28,23 +30,28 @@ class TcpdumpAgent(DispatchAgent):
         DispatchAgent.__init__(self)
         self.dumpfile = path_join('/', 'tmp', 'tcpdump.cap')
         self.agentlog = path_join('/', 'tmp', 'tcpdump_agent.log')
+        self.capture_address = None
 
         # "private"
         self._proc = None
         self._lfile = None
 
     @agentmethod()
-    def startCollection(self, msg, expression, dumpfile=None, tcpdump_args=''):
+    def startCollection(self, msg, expression, dumpfile=None, tcpdump_args='', capture_address=None):
         if self._proc:
             log.info('tcpdump already running. Stopping it so we can restart it...')
             self.stopCollection(None)
 
         log.info("starting collection")
-        # GTL - if needed add route table query to get correct iface "pointing" to a given host
-        # and replace "expression with "host destination" or something.
-        cmd = 'tcpdump -i any'
+        cmd = 'tcpdump'
+
+        addr = capture_address if capture_address else self.capture_address
+        iface = self._addr2iface(addr)
+        cmd += ' -i {}'.format(iface) 
+
         df = dumpfile if dumpfile else self.dumpfile
         cmd += ' -w {}'.format(df)
+    
         if tcpdump_args:
             cmd += ' {}'.format(tcpdump_args)
 
@@ -109,6 +116,16 @@ class TcpdumpAgent(DispatchAgent):
     def confirmConfiguration(self):
         return True
 
+    def _addr2iface(self, inaddr):
+        for iface in interfaces():
+            addrs = ifaddresses(iface)
+            if AF_INET in addrs:
+                for addr in addrs[AF_INET]:
+                    if inaddr == addr['addr']:
+                        return iface
+
+        return None
+
 def getAgent(**kwargs):
     agent = TcpdumpAgent()
     agent.setConfiguration(None, **kwargs)
@@ -116,13 +133,14 @@ def getAgent(**kwargs):
 
 if __name__ == "__main__":
     from sys import argv
-
+    
     # run directly if debugging.
     if '-d' in argv:
         from time import sleep
         logging.basicConfig(level=logging.DEBUG)
         a = getAgent()
-        a.startCollection(None, 'host server1')
+
+        a.startCollection(None, 'host server1', capture_address='10.1.2.1')
         sleep(10)
         a.stopCollection(None)
         a.archiveDump(None, '/tmp/archives')
