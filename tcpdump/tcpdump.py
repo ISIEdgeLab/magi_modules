@@ -30,7 +30,6 @@ class TcpdumpAgent(DispatchAgent):
         DispatchAgent.__init__(self)
         self.dumpfile = path_join('/', 'tmp', 'tcpdump.cap')
         self.agentlog = path_join('/', 'tmp', 'tcpdump_agent.log')
-        self.capture_address = None
 
         # "private"
         self._proc = None
@@ -45,9 +44,15 @@ class TcpdumpAgent(DispatchAgent):
         log.info("starting collection")
         cmd = 'tcpdump'
 
-        addr = capture_address if capture_address else self.capture_address
-        iface = self._addr2iface(addr)
-        cmd += ' -i {}'.format(iface) 
+        if capture_address:
+            iface = self._addr2iface(capture_address)
+            if not iface:
+                log.critical('Unable to find iface for address: {}'.format(capture_address))
+                return False
+
+            cmd += ' -i {}'.format(iface) 
+        else:
+            cmd += ' -i any'
 
         df = dumpfile if dumpfile else self.dumpfile
         cmd += ' -w {}'.format(df)
