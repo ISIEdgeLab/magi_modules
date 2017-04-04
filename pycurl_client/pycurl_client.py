@@ -36,6 +36,8 @@ class PyCurlAgent(TrafficClientAgent):
         # bind to specific local port
         self.localPort = None
 
+        self.rateLimit = 0
+
         # SOCKS support
         self.useSocks = False
         self.socksServer = "localhost"
@@ -155,6 +157,9 @@ class PyCurlAgent(TrafficClientAgent):
         c.setopt(c.FOLLOWLOCATION, True)   # do we want this? Shouldn't come up in current setup.
         if self.localPort:
             c.setopt(c.LOCALPORT, self.localPort)
+
+        if self.rateLimit:
+            c.setopt(c.MAX_RECV_SPEED_LARGE, self.rateLimit)
 
         if self.useSocks:
             c.setopt(c.PROXY, '')
