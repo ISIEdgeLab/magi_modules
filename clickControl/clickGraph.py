@@ -7,7 +7,7 @@
 import networkx as nx
 import netifaces as ni
 import re, struct, socket, os
-import logging
+import logging, json
 
 from random import shuffle
 from collections import deque
@@ -21,8 +21,23 @@ class clickGraph():
         self.click_config = infile
         self.g = nx.Graph()
         self.log = logging.getLogger(__name__)
+        self.isDPDK = False
+        self.DPDKInfo = []
+        self.IPtoIfaceMap = {}
+
         
+        if os.path.exists('/tmp/ifconfig.json'):
+            self.isDPDK = True
+            self.getDPDKInfo()
+
+        self.buildIPtoIfaceMap()
+            
         self.parseConfig()
+
+    def getDPDKInfo(self):
+        fh = open('/tmp/ifconfig.json')
+        self.DPDKInfo = json.load(fh)
+        fh.close()
         
     def parseConfig(self):
         ''' Parse the click config to build the graph'''
@@ -87,11 +102,20 @@ class clickGraph():
                         if re.match("ARPQuerier.*", token):
                             m = re.search("eth[0-9]+", token)
                             iface = ""
+                            node = ""
                             if m:
                                 iface = m.group(0)
                             else:
-                                iface = re.search("vlan[0-9]+", token).group(0)
-                            node = self.mapInterfaceToNeighbor(iface)
+                                m = re.search("vlan[0-9]+", token)
+                                if m:
+                                    iface = m.group(0)
+                                else:
+                                    ip = re.search("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", token).group(0)
+                                    iface = self.IPtoIfaceMap[ip]
+                                    node = self.findNeighbor(ip)
+                                    
+                            if node == "":
+                                node = self.mapInterfaceToNeighbor(iface)
                             ifacemap[tokens[0]] = node
                             self.g.add_node(node)
                             break
@@ -102,17 +126,37 @@ class clickGraph():
                         if re.match("ToDevice.*", token):
                             m = re.search("eth[0-9]+", token)
                             iface = ""
+                            node = ""
                             if m:
                                 iface = m.group(0)
                             else:
-                                iface = re.search("vlan[0-9]+", token).group(0)
-                            node = self.mapInterfaceToNeighbor(iface)
+                                m = re.search("vlan[0-9]+", token)
+                                if m:
+                                    iface = m.group(0)
+                                else:
+                                    ip = re.search("[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", token).group(0)
+                                    iface = self.IPtoIfaceMap[ip]
+                                    node = self.findNeighbor(ip)
+
+                            if node == "":
+                                node = self.mapInterfaceToNeighbor(iface)
                             ifacemap[tokens[0]] = node
                             self.g.add_node(node)
                             break
                                 
         return True
 
+    def buildIPtoIfaceMap(self):
+        if not self.isDPDK:
+            for interface in ni.interfaces():
+                addrs = ni.ifaddresses(interface)
+                if ni.AF_INET in addrs:
+                    self.IPtoIfaceMap[addrs[ni.AF_INET][0]['addr']] = interface
+        else:
+            for entry in self.DPDKInfo:
+                if 'ip' in entry:
+                    self.IPtoIfaceMap[entry['ip']] = entry['interface']
+    
     def mapInterfaceToNeighbor(self, iface):
         '''
         Map Interface names to Neighbors
