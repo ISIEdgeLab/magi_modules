@@ -7,10 +7,9 @@
 from magi.testbed import testbed
 from magi.util.agent import agentmethod, DispatchAgent
 from magi.util.processAgent import initializeProcessAgent
-from subprocess import Popen
-from subprocess import STDOUT
+from subprocess import Popen, STDOUT, check_output, CalledProcessError
 from netifaces import interfaces, ifaddresses
-from socket import AF_INET
+from socket import AF_INET, gethostbyname
 
 from os.path import exists, isdir, basename, join as path_join
 from os import makedirs
@@ -36,7 +35,8 @@ class TcpdumpAgent(DispatchAgent):
         self._lfile = None
 
     @agentmethod()
-    def startCollection(self, msg, expression, dumpfile=None, tcpdump_args='', capture_address=None):
+    def startCollection(self, msg, expression, dumpfile=None, destination=None, 
+                        tcpdump_args='', capture_address=None):
         if self._proc:
             log.info('tcpdump already running. Stopping it so we can restart it...')
             self.stopCollection(None)
@@ -44,13 +44,22 @@ class TcpdumpAgent(DispatchAgent):
         log.info("starting collection")
         cmd = 'tcpdump'
 
-        if capture_address:
+        if destination:
+            iface = self._dest2iface(destination)
+            if not iface:
+                log.critical('Unable to discover interface that routes to {}.'.format(destination))
+                return False
+
+            cmd += ' -i {}'.format(iface)
+
+        elif capture_address:
             iface = self._addr2iface(capture_address)
             if not iface:
                 log.critical('Unable to find iface for address: {}'.format(capture_address))
                 return False
 
             cmd += ' -i {}'.format(iface) 
+
         else:
             cmd += ' -i any'
 
@@ -67,7 +76,13 @@ class TcpdumpAgent(DispatchAgent):
         # Do not remove the stdout, stderr redirection! It turns out tcpdump really doesn't
         # like not having a stdout/err and will die if this is removed.
         self._lfile = open(self.agentlog, 'w')
-        self._proc = Popen(cmd.split(), close_fds=True, stdout=self._lfile, stderr=STDOUT)
+        try:
+            self._proc = Popen(cmd.split(), close_fds=True, stdout=self._lfile, stderr=STDOUT)
+        except OSError as e:
+            self._lfile.close()
+            self._proc = None
+            log.critical('Unable to run cmd {}: {}'.format(cmd, e))
+            return False
 
         sleep(1)
         if not self._proc or self._proc.poll():
@@ -130,6 +145,28 @@ class TcpdumpAgent(DispatchAgent):
                         return iface
 
         return None
+
+    def _dest2iface(self, destination):
+        addr = gethostbyname(destination)
+        if not addr:
+            log.critical('Unable to get address for {}'.format(destination))
+            return None
+
+        cmd = 'ip route get {}'.format(addr)
+        try:
+            out = check_output(cmd.split())
+        except CalledProcessError as e:
+            log.critical('Error invoking "{}": {}'.format(cmd, e))
+            return None
+
+        line = out.split('\n')[0].split()
+        iface = line[line.index('dev')+1]  # dev name is always just after "dev" 
+
+        if not iface:
+            log.critical('Unable to find device name in ip route output: {}'.format(line))
+            return None
+        
+        return iface
 
 def getAgent(**kwargs):
     agent = TcpdumpAgent()
