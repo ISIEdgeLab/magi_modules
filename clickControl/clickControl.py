@@ -50,14 +50,14 @@ class clickControlAgent(DispatchAgent):
         return True
 
     @agentmethod()
-    def startClick(self, msg, userMode=True):
+    def startClick(self, msg, userMode=False, DPDK=True):
         click_running = False
         # Check if click configuration exists      
         if not os.path.isfile(self.click_config):
             self.log.error("Click: no such configuration file %s" % self.click_config)
             return False
        
-        if not userMode:
+        if not userMode and not DPDK:
             # Check if the module is loaded.  If so, uninstall click first and reinstall
             (output, err) = execl.execAndRead("lsmod")
             if err != "":
@@ -80,7 +80,13 @@ class clickControlAgent(DispatchAgent):
                 return False
 
         else:  # not in kernel - does not daemonize itself, so we handle it as a proc.
-            cmd = 'click {} -u /click'.format(self.click_config)
+            if DPDK:
+                cmd = 'click  --dpdk -c 0xffffff -n 4 -- -u /click {}'.format(self.click_config)
+            elif userMode:
+                cmd = 'click {} -u /click'.format(self.click_config)
+            else:
+                log.error('startClick must be one of kernel, userMode, or DPDK')
+
             self.log.info('Running cmd: {}'.format(cmd))
             self._clickProc = Popen(cmd.split())
             time.sleep(1)   # give it sec to fail...
