@@ -1,6 +1,6 @@
 name: gstreamer_rtsp
 magi_version: 1.7
-display: gstreamer_rtsp
+display: Gstreamer RTSP Agent
 description: run rtsp on a server and start clients
 execute: thread 
 mainfile: gstreamer_rtsp.py

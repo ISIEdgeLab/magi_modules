@@ -1,6 +1,6 @@
 name: GstreamerRTP
 magi_version: 1.7
-display: GstreamerRTP
+display: Gstreamer RTP Agent
 description: run rtp on a server and start clients
 execute: thread 
 mainfile: GstreamerRTPAgent.py
