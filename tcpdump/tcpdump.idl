@@ -1,6 +1,6 @@
 name: tcpdump
 magi_version: 1.7
-display: tcpdump agent
+display: Tcpdump agent
 description: tcpdump
 mainfile: tcpdump.py
 execute: thread 
