@@ -22,9 +22,6 @@ class ClickConfigParser(object):
         self._confpath = None
         self._config = {}
 
-        # A little bit of embedded knowledge. This may be better put elsewhere.
-        self._router_class = 'RadixIPLookup'
-
     def get_value(self, node, key):
         try:
             return self._config[node][key]

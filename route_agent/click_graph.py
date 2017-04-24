@@ -219,7 +219,11 @@ class ClickGraph(object):
     def get_network_edge_map(self):
         '''Return a node mapping of phy nodes to virtual routers. The map is phy node indexed dict of
         three tuples: (phy node link name, router name, click node name).'''
+        # This function handles kernel-click, which shows up as an click node with class = self._physical_class
+        # and DPDK which does not. The DPDK looks for gateway nodes in the route tables of the click nodes
+        # and assumes they are physical nodes.
         network_map = {}
+        # kernel click.
         for node in self._router_graph.nodes():
             if self._router_graph.node[node]['data'].node_class == self._physical_class: # phy node, add the links.
                 log.debug('adding {} edges to network edge map.'.format(node))
@@ -228,6 +232,18 @@ class ClickGraph(object):
                     network_map[node].append({
                         'to_link': edge_data['to'], 
                         'nbr': nbr,
+                        'nbr_host': testbed.nodename})
+        # DPDK click.
+        for node in self._router_graph.nodes():
+            for entry in self._router_graph.node[node]['data'].table:
+                if entry['gw']:
+                    if node not in network_map:
+                        network_map[node] = []
+
+                    names = socket.gethostbyaddr(str(entry['gw']))
+                    network_map[node].append({
+                        'to_link': names[0],
+                        'nbr': min(names[1], key=len),
                         'nbr_host': testbed.nodename})
 
         return network_map
@@ -406,6 +422,7 @@ class ClickGraph(object):
 
                 n = found_node[0]
                 if self._click_graph.node[n]['data'].node_class == self._physical_class:
+                    # there will be a physical class when we're in kernel mode.
                     name, frm = self._mapInterfaceToNeighbor(self._click_graph.node[n]['data'].config[0])
                 else:
                     name = n
@@ -413,6 +430,17 @@ class ClickGraph(object):
 
                 to = self._click_graph[node][nbr]['link']
                 router_nbrs.append({'name': name, 'frm': frm, 'to': to})
+            
+        # we also have to find the physcial node in DPDK mode. In this mode there 
+        # are no nodes of class physical type. We go through the routing tables looking
+        # for gateways and assume those are physical nodes.
+        for entry in self._router_graph.node[node]['data'].table:
+            if entry['gw']:
+                names = socket.gethostbyaddr(str(entry['gw']))
+                router_nbrs.append({
+                    'to': names[0],
+                    'name': min(names[1], key=len),   # shortest name is canonical
+                    'frm': node})
 
         return router_nbrs
 

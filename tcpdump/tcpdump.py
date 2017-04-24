@@ -124,8 +124,11 @@ class TcpdumpAgent(DispatchAgent):
             create = False
 
         if create:
-            log.info('Making archive dir: {}'.format(archivepath))
-            makedirs(archivepath)
+            try:
+                makedirs(archivepath)
+                log.info('Created archive dir: {}'.format(archivepath))
+            except OSError as e:
+                log.info('Directory already exists.')
         
         df = dumpfile if dumpfile else self.dumpfile
         destname = '{}-{}-{}'.format(testbed.getNodeName(), self.name, basename(df))
@@ -182,7 +185,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
         a = getAgent()
 
-        a.startCollection(None, 'host server1', capture_address='10.1.2.1')
+        a.startCollection(None, 'host traf11', destination='traf11')
         sleep(10)
         a.stopCollection(None)
         a.archiveDump(None, '/tmp/archives')
