@@ -197,20 +197,20 @@ class clickControlAgent(DispatchAgent):
     @agentmethod()
     def updateDelay(self, msg, link="", delay="0.0ms"):
         # this config can be 'delay' or 'latency'
-        for key in ['delay', 'latency']:
-            if self.updateClickConfig(msg, '{}_bw'.format(link), key, delay):
-                return True
+        ret = [False]
+        for key in ['latency', 'delay']:
+            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, delay))
 
-        return False
+        return any(ret)
 
     @agentmethod()
     def updateCapacity(self, msg, link="", capacity="1Gbps"):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
-        for key in ['rate', 'bandwidth']:
-            if self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity):
-                return True
+        ret = [False]
+        for key in ['bandwidth', 'rate']:
+            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity))
 
-        return False
+        return any(ret)
 
     @agentmethod()
     def updateLossProbability(self, msg, link="", loss="0.0"):
