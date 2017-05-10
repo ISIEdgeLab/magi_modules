@@ -6,7 +6,6 @@ import time
 from magi.util.agent import ReportingDispatchAgent, agentmethod
 from magi.util.processAgent import initializeProcessAgent
 from magi.util import database
-from magi_db import MagiDatabase
 from libdeterdash import DeterDashboard
 
 log = logging.getLogger(__name__)
@@ -38,9 +37,11 @@ class DataAggregationAgent(ReportingDispatchAgent):
         # "private" variables. 
         self._active = False
 
-        # will raise exception on error.
-        # best to only call this once as it reads/parses a file. (slow)
-        self._db = MagiDatabase().db()
+        c = database.getConnection()
+        if c:
+            self._db = c['magi']  # GTL 'magi' should be pulled from magi.db somehow.
+        else:
+            raise DataAggregationAgentException('Unable to connect to Magi database.')
         
         self._viz_configured = False
 
@@ -48,24 +49,30 @@ class DataAggregationAgent(ReportingDispatchAgent):
         if not self._active:
             return self.aggregation_period+now-time.time()
 
+        log.info('Running periodic aggregation.')
+
         # GTL - self.name is not set until this thread is run().   
         if not self.name:
             raise DataAggregationAgentException('self.name is empty, unable to continue.')
-        
+
+        log.info('self.name: {}'.format(self.name))
+
         # have to wastefully do this here as self.name is not set before this. Ugh.
         if not self._viz_configured:
+            log.info('configuring visualization.')
             # tell the GUI we want to display this data.
             dashboard = DeterDashboard()
             units = [{'data_key': self.data_key,
                       'display': 'Bytes',          # requires knowledge of the aggregated agent.
                       'unit': 'bytes/sec'}]        # need to abstract this somehow...
-            dashboard.add_horizon_chart('Aggregated', self.name, 'enclave', units)
+            dashboard.add_time_plot('Aggregated', self.name, 'enclave', units)
             self._viz_configured = True
 
         self._collection = database.getCollection(self.name)
 
         # get access to the agent's collection for reading.
-        log.debug('Checking for aggregatable data in {}/{}.'.format(self.agent_key, self.data_key))
+        # log.debug('Checking for aggregatable data in {}/{}.'.format(self.agent_key, self.data_key))
+        log.info('Checking for aggregatable data in {}/{}.'.format(self.agent_key, self.data_key))
 
         # find new data using given table and key and timestamp.
         for name, nodes in self.enclaves.iteritems():
@@ -126,9 +133,11 @@ class DataAggregationAgent(ReportingDispatchAgent):
         return True
 
     def startCollection(self, msg):
+        log.info('Starting collection.')
         self._active = True
 
     def stopCollection(self, msg):
+        log.info('Stopping collection.')
         self._active = False
 
 def getAgent(**kwargs):
