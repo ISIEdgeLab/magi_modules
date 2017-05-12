@@ -142,7 +142,11 @@ class GstreamerRTPAgentViz(ReportingDispatchAgent):
     @agentmethod()
     def startReporting(self, msg):
         self.active = True
-        return
+        return True
+
+    def stopReporting(self, msg):
+        self.active = False
+        return True
 
     def confirmConfiguration(self):
         log.info('Checking given configuration...')
