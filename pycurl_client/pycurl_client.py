@@ -11,6 +11,7 @@ import pycurl
 import logging
 import random
 import sys
+import socket
 
 from magi.util.distributions import *
 from magi.util.agent import TrafficClientAgent
@@ -31,6 +32,11 @@ class PyCurlAgent(TrafficClientAgent):
 
         # Can be support distribution function (look magi.util.distributions)
         self.sizes = '1000'
+
+        # bind to specific local port
+        self.localPort = None
+
+        self.rateLimit = 0
 
         # SOCKS support
         self.useSocks = False
@@ -149,6 +155,12 @@ class PyCurlAgent(TrafficClientAgent):
         c.setopt(c.PROGRESSFUNCTION, self._progress_callback)
         c.setopt(c.WRITEFUNCTION, lambda s: None) # Do nothing with received data.
         c.setopt(c.FOLLOWLOCATION, True)   # do we want this? Shouldn't come up in current setup.
+        if self.localPort:
+            c.setopt(c.LOCALPORT, self.localPort)
+
+        if self.rateLimit:
+            c.setopt(c.MAX_RECV_SPEED_LARGE, self.rateLimit)
+
         if self.useSocks:
             c.setopt(c.PROXY, '')
             c.setopt(c.PROXYPORT, self.socksPort)

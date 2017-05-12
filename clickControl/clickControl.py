@@ -10,6 +10,8 @@ import time, ast, threading
 import netifaces as ni
 import networkx as nx
 
+from subprocess import Popen
+
 import clickGraph
 from pymongo import MongoClient
 from magi.util.agent import agentmethod, DispatchAgent
@@ -18,6 +20,7 @@ from magi.testbed import testbed
 from magi.util import database, execl
 from magi.db import Collection
 from one_hop_neighbors import OneHopNeighbors
+from click_config_parser import ClickConfigParser, ClickConfigParserException
 
 
 def getAgent(**kwargs):
@@ -33,81 +36,86 @@ class clickControlAgent(DispatchAgent):
         DispatchAgent.__init__(self)
         self.log = logging.getLogger(__name__)
         self.click_config = "/tmp/vrouter.click"
-        self.topology = database.getCollection('TopologyServer')
         self.UDPRunning = False
         self.isFlapping = False
 
         self.cg = clickGraph.clickGraph(self.click_config)
         # assumes clicks installed, should we install?
-        
+
+        self._clickProc = None
+        self._confPath = '/click'   # handle to click's runtime configuration.
+
     @agentmethod()
     def updateVisualization(self, msg):
         return True
-        '''
-        This entire function needs to be redone
-        (nodes, links, bad_links) = self.parseConfig()
-        nodes = list(nodes)
-        
-        old_data = database.getData('topo_agent', dbHost=database.getCollector(), filters={'host': 'vrouter'})
-        data = old_data[0]
-        old_nodes = json.loads(data['nodes'])
-        old_links = json.loads(data['edges'])
-        old_nodes.remove(testbed.nodename)
-        nodes.extend(old_nodes)
-
-        fixed_links = [x for x in old_links if x not in bad_links]
-        links.extend(fixed_links)
-        
-        data['nodes'] = json.dumps(nodes)
-        data['edges'] = json.dumps(links)
-        data.pop('agent', None)
-        data.pop('created', None)
-        data.pop('host', None)
-        data.pop('_id', None)
-
-        
-        collection =  database.getCollection('topo_agent', dbHost=database.getCollector())
-        collection.insert(data)
-        '''
 
     @agentmethod()
-    def startClick(self, msg):
+    def startClick(self, msg, userMode=False, DPDK=True):
         click_running = False
         # Check if click configuration exists      
         if not os.path.isfile(self.click_config):
             self.log.error("Click: no such configuration file %s" % self.click_config)
             return False
-        
-        # Check if the module is loaded.  If so, uninstall click first and reinstall
-        (output, err) = execl.execAndRead("lsmod")
-        if err != "":
-            self.log.error("Click: %s" % err)
-            return False
-        
-        tokens = output.split()
-        
-        for token in tokens:
-            if token == "click":
-                click_running = True
-                break
+       
+        if not userMode and not DPDK:
+            # Check if the module is loaded.  If so, uninstall click first and reinstall
+            (output, err) = execl.execAndRead("lsmod")
+            if err != "":
+                self.log.error("Click: %s" % err)
+                return False
+            
+            tokens = output.split()
+            
+            for token in tokens:
+                if token == "click":
+                    click_running = True
+                    break
 
-        if click_running:
-            self.stopClick(msg)
+            if click_running:
+                self.stopClick(msg)
 
-        (output, err) = execl.execAndRead("sudo click-install -j 2 %s" % self.click_config)
-        if err != "":
-            self.log.error("Click: %s" % err)
-            return False
+            (output, err) = execl.execAndRead("sudo click-install -j 2 %s" % self.click_config)
+            if err != "":
+                self.log.error("Click: %s" % err)
+                return False
+
+        else:  # not in kernel - does not daemonize itself, so we handle it as a proc.
+            if DPDK:
+                cmd = 'click  --dpdk -c 0xffffff -n 4 -- -u /click {}'.format(self.click_config)
+            elif userMode:
+                cmd = 'click {} -u /click'.format(self.click_config)
+            else:
+                log.error('startClick must be one of kernel, userMode, or DPDK')
+
+            self.log.info('Running cmd: {}'.format(cmd))
+            self._clickProc = Popen(cmd.split())
+            time.sleep(1)   # give it sec to fail...
+            if self._clickProc.poll():
+                self.log.error("Error starting click in user space. exit={}".format(self._clickProc.poll()))
+                self._clickProc = None
+                return False
+
+            self.log.info('user space click started. pid={}'.format(self._clickProc.pid))
 
         return True
         
         
     @agentmethod()
     def stopClick(self, msg):
-        (output, err) = execl.execAndRead("sudo click-uninstall")
-        if err != "":
-            self.log.error("Click: %s" % err)
-            return False
+        if not self._clickProc:
+            (output, err) = execl.execAndRead("sudo click-uninstall")
+            if err != "":
+                self.log.error("Click: %s" % err)
+                return False
+
+            os.rmdir('/click')   # process does not clean up the soket when killed.
+
+        else:
+            self._clickProc.kill()
+            self._clickProc.wait()   # GTL may not want this.
+            self._clickProc = None
+            os.remove('/click')   # process does not clean up the soket when killed.
+
         return True
         
     @agentmethod()
@@ -174,82 +182,45 @@ class clickControlAgent(DispatchAgent):
         return True
 
     @agentmethod()
-    def updateDelay(self, msg, link="", delay="0.0ms"):
-        delay_path = "/proc/click/%s_bw/latency" % link
-        if not os.path.exists(delay_path):
-            delay_path = "/proc/click/%s_delay/delay" % link
-            if not os.path.exists(delay_path):
-                self.log.error("Click: no such link %s" % link)
-                return False
-
-        fh = None
+    def updateClickConfig(self, msg, node, key, value):
+        '''If you know the exact click node and key you can update teh value directly.'''
+        retVal = False
         try:
-            fh = open(delay_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
+            ccp = ClickConfigParser()
+            ccp.parse(self._confPath)
+            retVal = ccp.set_value(node, key, value)
+        except ClickConfigParserException as e:
+            self.log.error(e)
 
-        fh.write(delay)
-        fh.close()
-            
-        return True
+        return retVal
+
+    @agentmethod()
+    def updateDelay(self, msg, link="", delay="0.0ms"):
+        # this config can be 'delay' or 'latency'
+        ret = [False]
+        for key in ['latency', 'delay']:
+            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, delay))
+
+        return any(ret)
 
     @agentmethod()
     def updateCapacity(self, msg, link="", capacity="1Gbps"):
-        cap_path = "/proc/click/%s_bw/rate" % link
-        if not os.path.exists(cap_path):
-            cap_path = "/proc/click/%s_bw/bandwidth" % link
-            if not os.path.exists(cap_path):
-                self.log.error("Click: no such link %s" % link)
-                return False
+        # Older versions of click use 'rate'. So we set both rate and bandwidth
+        ret = [False]
+        for key in ['bandwidth', 'rate']:
+            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity))
 
-        fh = None
-        try:
-            fh = open(cap_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
-
-        fh.write(capacity)
-        fh.close()
-            
-        return True
+        return any(ret)
 
     @agentmethod()
     def updateLossProbability(self, msg, link="", loss="0.0"):
-        loss_path = "/proc/click/%s_loss/drop_prob" % link
-        if not os.path.exists(loss_path):
-            self.log.error("Click: no such link %s" % link)
-            return False
-
-        fh = None
-        try:
-            fh = open(loss_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
-
-        fh.write(loss)
-        fh.close()
-        return True
-
+        return self.updateClickConfig(msg, '{}_loss'.format(link), 'drop_prob', loss)
 
     @agentmethod()
     def updateRoute(self, msg, router="", ip="", port="", next_hop=""):
         m = re.match("[0-9]+", router)
         if m:
             router = "router%s" % m.group(0)
-        route_path = "/proc/click/%s/set" % router
-        if not os.path.exists(route_path):
-            self.log.error("Click: no such router %s" % router)
-            return False
-
-        fh = None
-        try:
-            fh = open(route_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
 
         if port == "":
             m = re.match("[0-9]+", next_hop)
@@ -260,11 +231,8 @@ class clickControlAgent(DispatchAgent):
                 self.log.error("Click: Cannot find link between %s and %s\n" % (router, next_hop))
                 return False
             
-        fh.write("%s %s" % (ip, port))
-        fh.close()
-        return True
+        return self.updateClickConfig(msg, router, 'set', '{} {}'.format(ip, port))
 
-    
     @agentmethod()
     def updateRoutes(self, msg, path=[], ip=""):
         c = 0
@@ -320,41 +288,13 @@ class clickControlAgent(DispatchAgent):
     
     @agentmethod()
     def startUDPTraffic(self, msg, node="source"):
-        udp_path = "/proc/click/%s/active" % node
-        if not os.path.exists(udp_path):
-            self.log.error("Click: no such node %s" % node)
-            return False
-
-        fh = None
-        try:
-            fh = open(udp_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
-
-        fh.write("true")
-        fh.close()
-        self.UDPRunning = True
-        return True
+        self.UDPRunning = self.updateClickConfig(msg, node, 'active', 'true')
+        return self.UDPRunning
 
     @agentmethod()
     def stopUDPTraffic(self, msg, node="source"):
-        udp_path = "/proc/click/%s/active" % node
-        if not os.path.exists(udp_path):
-            self.log.error("Click: no such node %s" % node)
-            return False
-
-        fh = None
-        try:
-            fh = open(udp_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
-
-        fh.write("false")
-        fh.close()
-        self.UDPRunning = False
-        return True
+        self.UDPRunning = self.updateClickConfig(msg, node, 'active', 'false')
+        return self.UDPRunning
 
     @agentmethod()
     def setUDPRate(self, msg, rate="100Mbps", node="source"):
@@ -394,24 +334,11 @@ class clickControlAgent(DispatchAgent):
 
         rate_in_pps = math.floor(init_rate * factor * multiplier / packet_size)
 
-        udp_path = "/proc/click/%s/rate" % node
-        if not os.path.exists(udp_path):
-            self.log.error("Click: no such node %s" % node)
-            return False
-
-        fh = None
-        try:
-            fh = open(udp_path, "w")
-        except IOError as e:
-            self.log.error("Click: %s" % e)
-            return False
-
         wasRunning = self.UDPRunning
         if self.UDPRunning:
             self.stopUDPTraffic(msg, node)
 
-        fh.write("%d" % rate_in_pps)
-        fh.close()
+        self.updateClickConfig(msg, node, 'rate', rate_in_pps)
 
         if wasRunning:
             self.startUDPTraffic(msg, node)

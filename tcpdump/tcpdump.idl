@@ -1,9 +1,11 @@
 name: tcpdump
 magi_version: 1.7
-display: A TCP Dump agent.
+display: Tcpdump agent
 description: tcpdump
 mainfile: tcpdump.py
 execute: thread 
+software:
+    - python-netifaces
 inherits:
     - DispatchAgent
 varibles:
@@ -23,6 +25,12 @@ method:
           help: The expression passed to tcpdump. e.g. "dst foobar" or "src 10.0.1.1 proto udp"
         - name: tcpdump_args
           help: extra, non-expression args, to pass to the tcpdump process when starting.
+          type: str
+        - name: capture_address
+          help: If given, capture on the interface which has this address. Overridden by "destination", if used.
+          type: str
+        - name: destination
+          help: If given, capture on the local interface that routes to destination. Overrides capture_address. Can be specified as hostname or ip address.
           type: str
     - name: stopCollection
       help: Stop collecting TCP dump information.

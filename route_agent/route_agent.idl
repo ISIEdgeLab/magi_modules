@@ -1,6 +1,6 @@
-name: Route Agent
+name: route_agent
 magi_version: 1.7
-display: Route Record
+display: Record Routing Information
 description: An agent that collects routing information.
 execute: thread 
 mainfile: route_agent.py

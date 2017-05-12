@@ -26,6 +26,10 @@ variables:
      type: boolean
      default: False
      help: If true use tsocks to send the request. Note that this agent assumes tsocks is installed and configured on the machine.
+   - name: rateLimit
+     type: integer
+     help: If given, throttle the client rate to the number given. If 0, do not limit.
+     default: 0
 method: 
   - name: startClient
     help: Start the client, thus creating HTTP traffic.

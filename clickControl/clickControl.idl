@@ -11,6 +11,10 @@ software:
   - python-netifaces
 method:
   - name: startClick
+    args:
+      - name: userMode
+        help: If True, start click in user mode, Otherwise startin kernel mode.
+        default: True
   - name: stopClick
   - name: updateLinks
   - name: updateDelay
