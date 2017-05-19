@@ -194,6 +194,7 @@ if __name__ == "__main__":
     agent = RouteReportAgent()
 
     if debug:
+        agent.startCollection(None)
         agent.periodic(time.time())
         exit(0)
 

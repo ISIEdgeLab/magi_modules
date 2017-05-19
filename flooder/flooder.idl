@@ -1,0 +1,71 @@
+name: Flooder
+magi_version: 1.7
+display: A wrapper around the Flooder utility
+description: A packet flooding utility.
+execute: thread
+mainfile: flooder.py
+inherits:
+    - DispatchAgent
+software:
+    - libnet-dev
+    - libpcap-dev
+    - flooder
+
+methods:
+    - name: startFlood
+      help: start the flood
+      args: []
+    
+    - name: stopFlood
+      help: stop the flood
+      args: []
+
+variables:
+    - name: dst
+      type: string
+      help: 'The CIDR representation of the destination(s) to flood. Format: "A.A.A.A/N"  (cidr), "A.A.A.A/M.M.M.M" (address and mask), "A.A.A.A" (single address).'
+
+    - name: proto
+      type: string
+      help: The protocol to flood with. Must be one of 'udp' or 'tcp'.
+
+    - name: length
+      type: string
+      help: The length(s) of the packets. Format must be "minmax(A,B)" or string representation of an integer ("1.23"). 
+
+    - name: ratetype
+      type: string
+      help: 'The type of rate to flood: one of "flat", "rampup", or "pulse".'
+
+    - name: highrate
+      type: int
+      help: The highest value to flood at in packets per second. 
+
+    - name: hightime
+      type: int
+      help: When using the 'pulse' rate type, how long to remain in the high state. Units are in milliseconds.
+
+    - name: lowrate
+      type: int
+      help: The lowest value to flood at in packets per second.
+
+    - name: lowtime
+      type: int
+      help: When using the 'pulse' rate type, how long to remain in the low state. Units are in milliseconds.
+
+    - name: risetime
+      type: int
+      help: The amount of time to rise from low to high when using the 'pulse' rate type.
+
+    - name: falltime
+      type: int
+      help: The amount of time to fall from high to low when using the 'pulse' rate type.
+
+    - name: sport
+      type: int
+      help: This is the help.
+
+    - name: dport
+      type: int
+      help: This is the help.
+
