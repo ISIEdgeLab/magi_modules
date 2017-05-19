@@ -25,7 +25,7 @@ class HttpAgent(TrafficClientAgent):
 
         # Can be support distribution function (look magi.util.distributions)
         self.sizes = '1000'
-        self.url = "http://%s/getsize.py?length=%d"
+        self.url = "http://%s/gettext/%d"
 
         # SOCKS support
         self.useSocks = False
