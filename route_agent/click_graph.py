@@ -105,7 +105,7 @@ class ClickGraph(object):
                 {'data_key': 'latency', 'display': 'Latency', 'unit': 'ms'},
                 {'data_key': 'drops', 'display': 'Packet Drops', 'unit': 'number'},
                 {'data_key': 'drop_prob', 'display': 'Drop Probability', 'unit': '%'},
-                {'data_key': 'capacity', 'display': 'Link Capacity', 'unit': 'ask Erik'}
+                {'data_key': 'capacity', 'display': 'Link Capacity', 'unit': 'packets'}
             ]
 
     def _build_graphs(self):
@@ -613,4 +613,4 @@ if __name__ == "__main__":
         draw_graph(cg._router_graph)
         draw_graph(cg._click_graph)
 
-    cg.set_config('router4', 'router1', 'latency', '500ms')
+    cg.set_config('router2', 'router1', 'latency', '500ms')
