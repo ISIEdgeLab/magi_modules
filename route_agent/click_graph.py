@@ -308,8 +308,13 @@ class ClickGraph(object):
         log.debug('click nodes: {}'.format(conf.keys()))
         for node, values in conf.iteritems():
             n = ClickNode()
-            for key, values in values.iteritems():
-                n.parse(key, values['lines'])
+
+            if 'name' in values:
+                # 'name' must be parsed first as it's used in other values (link name, etc)
+                n.parse('name', values['name']['lines'])
+
+            for key, vals in values.iteritems():
+                n.parse(key, vals['lines'])
 
             # we keep the properties of the node in "data" rather than make ClickNode hashable. Dunno why.
             self._click_graph.add_node(n.name, data=n)
