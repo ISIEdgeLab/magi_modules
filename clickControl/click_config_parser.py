@@ -3,6 +3,7 @@
 import logging
 import socket
 import os.path
+import re
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,11 @@ class ClickConfigParser(object):
 
     def set_value(self, node, key, value):
         '''Set a spefic value. i.e. write this value to the active click configuration.'''
-        return self._write(node, key, value)
+        rval = self._write(node, key, value)
+        if not rval:
+            log.info('Error setting key {} to value {}'.format(value, key))
+
+        return rval
 
     def get_configuration(self):
         '''
@@ -70,7 +75,7 @@ class ClickConfigParser(object):
                 if handler == 'handlers':   # handlers lists itself. skip it.
                     continue
 
-                if perm.startswith('r') or perm != 'r+':   # only read permissions have readable values...
+                if perm.startswith('r'):   # only read permissions have readable values...
                     value = self._read('{}.{}'.format(node, handler))
                     if value:
                         if node not in self._config:
@@ -89,8 +94,12 @@ class ClickConfigParser(object):
         msg = path.replace(os.sep, '.')
         s = self._open_control_socket(self._confpath)
         s.sendall('READ ' + msg + '\r\n')   # CRLF is expected.
-        datasize = self._read_socket_response(s)
+        success, resp = self._read_socket_response(s)
+        if not success:
+            return False, 'Error reading click socket: {}'.format(resp)
+
         lines = []
+        datasize = int(resp)
         if datasize > 0:
             log.debug('reading {} bytes'.format(datasize))
             buf = s.recv(datasize)
@@ -99,7 +108,6 @@ class ClickConfigParser(object):
             lines = [t.strip() for t in buf.split('\n') if t]  # remove empty lines and split on \n
             if msg.lower() == 'list':
                 lines = lines[1:]
-            lines
 
         s.close()
         return lines
@@ -119,18 +127,18 @@ class ClickConfigParser(object):
             return buf
 
         resp_line = _readline(s)
-        code, _ = resp_line.split(' ', 1)
-        if code != '200':
-            return -1
+        line = re.split(' |-', resp_line)
+        if line[0] != '200':
+            try:
+                err_msg = _readline(s)
+            except socket.timeout:
+                log.debug('socket read timeout')
+                err_msg = None
 
-        line = _readline(s)
-        _, bytecnt = line.split()
-        try:
-            int(bytecnt)
-        except TypeError:
-            return -1
+            return False, err_msg
 
-        return int(bytecnt)
+        _, bytecnt = _readline(s).split()
+        return True, bytecnt
 
     def _read_file(self, subpath):
         path = os.path.join(self._confpath, subpath.replace('.', os.sep))
@@ -183,13 +191,20 @@ class ClickConfigParser(object):
                 cmd = 'write {}.{} {}\r\n'.format(node, key, v)
                 log.info('writing cmd to socket: {}'.format(cmd))
                 s.send(cmd)
-                if -1 == self._read_socket_response(s):
-                    return False   # error in response. 
         except IOError as e:
-            log.warn('Unable to write to socket.')
+            log.warn('Unable to write to socket: {} --> {}'.format(key, value))
             return False
-        finally:
-            s.close()
+
+        try:
+            success, resp = self._read_socket_response(s)
+            if not success:
+                log.info('click responded with error code to write: {}'.format(resp))
+                return False   # error in response. 
+
+            log.info('write response: {}'.format(resp))
+        except IOError as e:
+            log.info('Unable to read response to write: {} --> {}'.format(key, value))
+            # This is OK.
         
         return True
 
@@ -205,7 +220,6 @@ class ClickConfigParser(object):
                     fd.write(value)
         except IOError as e:
             log.warn('Unable to write to file. ({} <-- {})'.format(path, value))
-
             return False
 
         return True
