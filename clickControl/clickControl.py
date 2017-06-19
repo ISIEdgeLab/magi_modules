@@ -130,7 +130,7 @@ class clickControlAgent(DispatchAgent):
                 return False
         if len(links) != len(losses):
             if len(losses) != 1 and len(losses) != 0:
-                self.log.error("Click: must specify loss probability for each link or specify only 1 or 0")
+                self.log.error("Click: must specify loss probibility for each link or specify only 1 or 0")
                 return False
             
         c = 0
@@ -215,6 +215,55 @@ class clickControlAgent(DispatchAgent):
     @agentmethod()
     def updateLossProbability(self, msg, link="", loss="0.0"):
         return self.updateClickConfig(msg, '{}_loss'.format(link), 'drop_prob', loss)
+
+    @agentmethod()
+    def updateTargetedLoss(self, msg, link=None, prefix=None, destination=None, source=None, clear_drops=None,
+                         burst=None, drop_prob=None, active=True):
+        node = '{}_TL'.format(link)  # TL hardcoded here and in template as a TargetedLoss node.
+        try:
+            ccp = ClickConfigParser()
+            ccp.parse(self._confPath)
+            # set all values given. return False if any fail.
+            args = { 'prefix': prefix, 'dest': destination, 'source': source, 'clear_drops': clear_drops,
+                     'burst': burst, 'drop_prob': drop_prob }
+            for key, value in args.iteritems():
+                if value is not None:   # can be zero or ''!
+                    if not ccp.set_value(node, key, value):
+                        self.log.info('Error setting {} --> {} in updateTargetedLoss'.format(key, value))
+                        return False
+
+            if not ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
+                self.log.info('Error setting targeted loss link active to {}'.format(active))
+                return False
+
+        except ClickConfigParserException as e:
+            self.log.error(e)
+            return False
+
+        return True
+
+    @agentmethod()
+    def updateSimpleReorder(self, msg, link=None, timeout=None, packets=None, sampling_prob=None, active=True):
+        node = '{}_SR'.format(link)
+        try:
+            ccp = ClickConfigParser()
+            ccp.parse(self._confPath)
+            args = { 'timeout': timeout, 'packets': packets, 'sampling_prob': sampling_prob }
+            for key, value in args.iteritems():
+                if value is not None:
+                    if not ccp.set_value(node, key, value):
+                        self.log.info('Error setting {} --> {} in updateSimpleReorder'.format(key, value))
+                        return False
+
+            if not ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
+                self.log.info('Error setting simple reorder link active to {}'.format(active))
+                return False
+
+        except ClickConfigParserException as e:
+            self.log.error(e)
+            return False
+
+        return True
 
     @agentmethod()
     def updateRoute(self, msg, router="", ip="", port="", next_hop=""):
