@@ -183,6 +183,8 @@ class ClickConfigParser(object):
                 cmd = 'write {}.{} {}\r\n'.format(node, key, v)
                 log.info('writing cmd to socket: {}'.format(cmd))
                 s.send(cmd)
+                if -1 == self._read_socket_response(s):
+                    return False   # error in response. 
         except IOError as e:
             log.warn('Unable to write to socket.')
             return False
@@ -263,6 +265,12 @@ if __name__ == '__main__':
             # change it back to be polite.
             print('Setting it back to {}'.format(old_bw))
             ccp.set_value(link, key, old_bw)
+
+        val = ccp.set_value('doesnotexist', 'nope', 666)   # should fail and return False
+        if val:
+            print('set_value() returned true for non-existent node - this is an error.')
+        else:
+            print('set_value() returned False for non-existent lnk - this is correct.')
 
     except ClickConfigParserException as e:
         print('Caught click config exception: {}'.format(e))
