@@ -226,6 +226,7 @@ class clickControlAgent(DispatchAgent):
             # set all values given. return False if any fail.
             args = { 'prefix': prefix, 'dest': destination, 'source': source, 'clear_drops': clear_drops,
                      'burst': burst, 'drop_prob': drop_prob }
+            self.log.info('setting targeted loss config: {}'.format(args))
             for key, value in args.iteritems():
                 if value is not None:   # can be zero or ''!
                     if not ccp.set_value(node, key, value):
@@ -249,6 +250,7 @@ class clickControlAgent(DispatchAgent):
             ccp = ClickConfigParser()
             ccp.parse(self._confPath)
             args = { 'timeout': timeout, 'packets': packets, 'sampling_prob': sampling_prob }
+            self.log.info('setting simple reorder config: {}'.format(args))
             for key, value in args.iteritems():
                 if value is not None:
                     if not ccp.set_value(node, key, value):
