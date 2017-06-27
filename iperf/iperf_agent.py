@@ -95,7 +95,7 @@ class IperfAgent(DispatchAgent):
         '''Start iperf everywhere.'''
         if self._proc:
             log.info('Stopping older iperf3 process.')
-            self.stop_traffic()
+            self.stop_traffic(msg)
             
         for f in self.flows:
             cmd = None
