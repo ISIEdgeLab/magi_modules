@@ -16,9 +16,9 @@ import logging
 
 log = logging.getLogger(__name__)
 
-class GstreamerRTPAgent(DispatchAgent):
+class GstreamerRTSPAgent(DispatchAgent):
     """
-        Run Gstreamer RTP server(s) and client(s).
+        Run Gstreamer RTSP server(s) and client(s).
     """
     def __init__(self):
         super(GstreamerRTSPAgent, self).__init__()
@@ -40,6 +40,7 @@ class GstreamerRTPAgent(DispatchAgent):
         self._proc = {}
         self._isrunning = False
         self._logfd = None
+        self._started_servers = {}
 
         self._loglevel = 'info'
 
@@ -92,16 +93,18 @@ class GstreamerRTPAgent(DispatchAgent):
             self._logfd.close()
             self._logfd = None
 
-    def start_server(self, msg):
-        '''Start gstreamer RTP servers.'''
+    def start_servers(self, msg):
+        '''Start gstreamer RTSP servers.'''
         if self._proc:
             log.info('Stopping older RTSP servers.')
             self.stop_servers()
         port_offset = 0
         for f in self.flows:
+            port_offset = port_offset + 1
             cmd = None
             if f['server'] == testbed.nodename:
                 cmd = 'python /proj/edgect/magi/modules/gstreamer/RTSP/RTSP_server.py -p {}'.format(self.start_port + port_offset)
+                self._started_servers[testbed.nodename] = self.start_port + port_offset
             if cmd:
                 count = 5
                 while count:
@@ -123,20 +126,25 @@ class GstreamerRTPAgent(DispatchAgent):
                     count = count-1
                     sleep(1)
                 log.info('gstreamer RTSP server started')
-                break
-                port_offset = port_offset + 1
 
     def start_traffic(self, msg):
-        '''Start gstreamer RTP clients.'''
+        '''Start gstreamer RTSP clients.'''
         if self._proc:
             log.info('Stopping older gstreamer RTSP processes.')
             self.stop_traffic()
         
+        self.start_servers(msg)
+        
         port_offset = 0    
         for f in self.flows:
             cmd = None
+            port_offset = port_offset + 1
             if f['client'] == testbed.nodename:
-                cmd = 'python /proj/edgect/magi/modules/gstreamer/RTSP/RTSP_client.py -p {} -c {}'.format(self.start_port + port_offset, f['server'])
+                if f['server'] in self._started_servers:
+                    port = self._started_servers[f['server']]
+                    cmd = 'python /proj/edgect/magi/modules/gstreamer/RTSP/RTSP_client.py -p {} -s {}'.format(port, f['server'])
+                else:
+                    log.error('Cannot determine port of server. Was server (%s) started?' % f['server'])
 
             if cmd:
                 # try a few times in case the servers have not started.
@@ -163,8 +171,6 @@ class GstreamerRTPAgent(DispatchAgent):
                     sleep(1)
 
                 log.info('gstreamer RTSP started')
-                break
-                port_offset = port_offset + 1
         return self._proc != None
 
     def stop_servers(self, msg):
@@ -207,7 +213,7 @@ class GstreamerRTPAgent(DispatchAgent):
             log.info('error pkilling gstreamer RTSP clients: {}'.format(e))
             pass
 
-        return True
+        return self.stop_servers(msg)
 
 def getAgent(**kwargs):
     agent = GstreamerRTPAgent()
