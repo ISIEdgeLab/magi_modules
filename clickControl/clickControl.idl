@@ -34,7 +34,9 @@ method:
         help: The frequency at which to flap, in seconds.
         type: float
   - name: startUDPTraffic
+    help: Start UDP traffic
   - name: stopUDPTraffic
+    help: Stop UDP traffic
   - name: setUDPRate
     help: Set the UDP rate.
     args: 
@@ -45,3 +47,48 @@ method:
         help: The node on which to set the rate.
         type: string
   - name: updateLossProbability
+    help: Modify the loss probability on a link.
+  - name: updateTargetedLoss
+    help: Configure targeted loss on a link.
+    args:
+      - name: link
+        help: The link to target.
+        type: string
+      - name: prefix
+        help: The network to target. Format is CIDR.
+        type: string
+      - name: destination
+        help: The destination network to target. Format is CIDR.
+        type: string
+      - name: source
+        help: The source network to target. Format is CIDR.
+        type: string
+      - name: clear_drops
+        help: Clear packet drop counter
+        type: boolean
+        default: False
+      - name: burst
+        help: ... Must be postive integer.
+        type: integer
+      - name: drop_prob
+        help: The probablity that a drop will happen. Value must be floating point between 0.0 and 1.0
+        type: float
+      - name: active
+        help: If true make node active. If false make node inactive. Default is true.
+        type: boolean
+        default: True
+  - name: updateSimpleReorder
+    help: Modify the packet reordering configuration on a click node.
+    args:
+      - name: link
+        help: The name of the link to modify, e.g "link_3_12"
+        type: string
+      - name: timeout
+        help: Hold packets until this time has passed.
+        type: integer
+      - name: packets
+        help: Hold this many packets until this many packets are emitted.
+        value: integer
+      - name: sampling_prob
+        help: The chance that a packet will be reordered. Values must be 0.0 <= X <= 1.0
+        type: float
