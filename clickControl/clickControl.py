@@ -119,7 +119,7 @@ class clickControlAgent(DispatchAgent):
         return True
         
     @agentmethod()
-    def updateLinks(self, msg, links=[], delays=[], capacities=[], losses=[]):
+    def updateLinks(self, msg, links=[], delays=[], capacities=[], losses=[], old=False):
         if len(links) != len(delays):
             if len(delays) != 1 and len(delays) != 0:
                 self.log.error("Click: must specify delay for each link or specify only 1 or 0")
@@ -153,7 +153,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_delay = delays[c]
 
-                ret = self.updateDelay(msg, link = c_link, delay = c_delay)
+                ret = self.updateDelay(msg, link = c_link, delay = c_delay, old)
                 if not ret:
                     return False
                 
@@ -164,7 +164,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_cap = capacities[c]
 
-                ret = self.updateCapacity(msg, link = c_link, capacity = c_cap)
+                ret = self.updateCapacity(msg, link = c_link, capacity = c_cap, old)
                 if not ret:
                     return False
 
@@ -175,7 +175,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_loss = losses[c]
 
-                ret = self.updateLossProbability(msg, link = c_link, loss = c_loss)
+                ret = self.updateLossProbability(msg, link = c_link, loss = c_loss, old)
                 if not ret:
                     return False
                     
@@ -195,25 +195,33 @@ class clickControlAgent(DispatchAgent):
         return retVal
 
     @agentmethod()
-    def updateDelay(self, msg, link="", delay="0.0ms"):
+    def updateDelay(self, msg, link="", delay="0.0ms", old=False):
         # this config can be 'delay' or 'latency'
         ret = [False]
-        for key in ['latency', 'delay']:
-            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, delay))
+        if old:
+           key = 'delay'
+        else:
+           key = 'latency'
+         
+        ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, delay))
 
         return any(ret)
 
     @agentmethod()
-    def updateCapacity(self, msg, link="", capacity="1Gbps"):
+    def updateCapacity(self, msg, link="", capacity="1Gbps", old=False):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
         ret = [False]
-        for key in ['bandwidth', 'rate']:
-            ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity))
+        if old:
+           key = 'rate'
+        else:
+           key = 'bandwidth'
+
+        ret.append(self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity))
 
         return any(ret)
 
     @agentmethod()
-    def updateLossProbability(self, msg, link="", loss="0.0"):
+    def updateLossProbability(self, msg, link="", loss="0.0", old=False):
         return self.updateClickConfig(msg, '{}_loss'.format(link), 'drop_prob', loss)
 
     @agentmethod()
