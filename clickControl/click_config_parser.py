@@ -24,6 +24,7 @@ class ClickConfigParser(object):
         self._config = {}
         self._socket = None
         self._socket_set = False
+        self._parse_time = -1.0
 
     def get_value(self, node, key):
         try:
@@ -48,14 +49,20 @@ class ClickConfigParser(object):
         '''
         return self._config
 
-    def parse(self, confpath='/click'):
+    def parse(self, confpath='/click', force=False):
         '''
         Parse the active click configuration pointed to by the confpath argument.
         '''
+        
         self._confpath = confpath
         if not os.path.exists(self._confpath):
             click_config_except('Click config path ({}) not found.'.format(self._confpath))
 
+        if os.path.getmtime(self._confpath) < self._parse_time and not force:
+            return
+
+        self._parse_time = time.time()
+            
         if not os.path.isdir(self._confpath):
             self._read = self._read_socket
             self._write = self._write_socket

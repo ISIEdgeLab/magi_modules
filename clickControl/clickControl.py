@@ -38,6 +38,8 @@ class clickControlAgent(DispatchAgent):
         self.click_config = "/tmp/vrouter.click"
         self.UDPRunning = False
         self.isFlapping = False
+        self.ccp = ClickConfigParser()
+
 
         self.cg = clickGraph.clickGraph(self.click_config)
         # assumes clicks installed, should we install?
@@ -186,9 +188,8 @@ class clickControlAgent(DispatchAgent):
         '''If you know the exact click node and key you can update teh value directly.'''
         retVal = False
         try:
-            ccp = ClickConfigParser()
-            ccp.parse(self._confPath)
-            retVal = ccp.set_value(node, key, value)
+            self.ccp.parse(self._confPath)
+            retVal = self.ccp.set_value(node, key, value)
         except ClickConfigParserException as e:
             self.log.error(e)
 
