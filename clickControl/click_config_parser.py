@@ -60,7 +60,6 @@ class ClickConfigParser(object):
             click_config_except('Click config path ({}) not found.'.format(self._confpath))
 
         if os.path.getmtime(self._confpath) < self._parse_time and not force:
-            log.info("Skipped Parse")
             return
 
         self._parse_time = time.time()
@@ -93,6 +92,7 @@ class ClickConfigParser(object):
                             self._config[node] = {}
                      
                         self._config[node][handler] = {'lines': value, 'permission': perm}
+        log.info("Parsed Config")
         
     def _read_socket(self, path):
         '''Send msg to the connected click control socket and return the parsed response.'''
