@@ -200,7 +200,7 @@ class clickControlAgent(DispatchAgent):
         # this config can be 'delay' or 'latency'
         ret = [False]
         for key in ['latency', 'delay']:
-           latest = self.updateClickConfig(msg, '{}_bw'.format(link), key, delay))
+           latest = self.updateClickConfig(msg, '{}_bw'.format(link), key, delay)
            ret.append(latest)
            if latest:
               return latest
@@ -229,19 +229,18 @@ class clickControlAgent(DispatchAgent):
                          burst=None, drop_prob=None, active=True):
         node = '{}_TL'.format(link)  # TL hardcoded here and in template as a TargetedLoss node.
         try:
-            ccp = ClickConfigParser()
-            ccp.parse(self._confPath)
+            self.ccp.parse(self._confPath)
             # set all values given. return False if any fail.
             args = { 'prefix': prefix, 'dest': destination, 'source': source, 'clear_drops': clear_drops,
                      'burst': burst, 'drop_prob': drop_prob }
             self.log.info('setting targeted loss config: {}'.format(args))
             for key, value in args.iteritems():
                 if value is not None:   # can be zero or ''!
-                    if not ccp.set_value(node, key, value):
+                    if not self.ccp.set_value(node, key, value):
                         self.log.info('Error setting {} --> {} in updateTargetedLoss'.format(key, value))
                         return False
 
-            if not ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
+            if not self.ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
                 self.log.info('Error setting targeted loss link active to {}'.format(active))
                 return False
 
@@ -255,17 +254,16 @@ class clickControlAgent(DispatchAgent):
     def updateSimpleReorder(self, msg, link=None, timeout=None, packets=None, sampling_prob=None, active=True):
         node = '{}_SR'.format(link)
         try:
-            ccp = ClickConfigParser()
-            ccp.parse(self._confPath)
+            self.ccp.parse(self._confPath)
             args = { 'timeout': timeout, 'packets': packets, 'sampling_prob': sampling_prob }
             self.log.info('setting simple reorder config: {}'.format(args))
             for key, value in args.iteritems():
                 if value is not None:
-                    if not ccp.set_value(node, key, value):
+                    if not self.ccp.set_value(node, key, value):
                         self.log.info('Error setting {} --> {} in updateSimpleReorder'.format(key, value))
                         return False
 
-            if not ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
+            if not self.ccp.set_value(node, 'active', str(active).lower()):  # lower case bool in click
                 self.log.info('Error setting simple reorder link active to {}'.format(active))
                 return False
 
