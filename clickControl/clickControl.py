@@ -153,7 +153,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_delay = delays[c]
 
-                ret = self.updateDelay(msg, link = c_link, delay = c_delay, old)
+                ret = self.updateDelay(msg, link = c_link, delay = c_delay, old = old)
                 if not ret:
                     return False
                 
@@ -164,7 +164,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_cap = capacities[c]
 
-                ret = self.updateCapacity(msg, link = c_link, capacity = c_cap, old)
+                ret = self.updateCapacity(msg, link = c_link, capacity = c_cap, old = old)
                 if not ret:
                     return False
 
@@ -175,7 +175,7 @@ class clickControlAgent(DispatchAgent):
                 else:
                     c_loss = losses[c]
 
-                ret = self.updateLossProbability(msg, link = c_link, loss = c_loss, old)
+                ret = self.updateLossProbability(msg, link = c_link, loss = c_loss, old = old)
                 if not ret:
                     return False
                     
