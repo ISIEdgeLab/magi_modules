@@ -22,6 +22,8 @@ class ClickConfigParser(object):
         super(ClickConfigParser, self).__init__()
         self._confpath = None
         self._config = {}
+        self._socket = None
+        self._socket_set = False
 
     def get_value(self, node, key):
         try:
@@ -109,7 +111,7 @@ class ClickConfigParser(object):
             if msg.lower() == 'list':
                 lines = lines[1:]
 
-        s.close()
+        self._close_control_socket()
         return lines
 
     def _read_socket_response(self, s):
@@ -157,7 +159,16 @@ class ClickConfigParser(object):
 
         return lines
 
+    def _close_control_socket(self):
+        if self._socket_set:
+            self._socket.close()
+
+        self._socket_set = False
+
+    
     def _open_control_socket(self, path):
+        if self._socket_set:
+            return self._socket
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.connect(path)
@@ -179,6 +190,8 @@ class ClickConfigParser(object):
         except (ValueError, TypeError):
             click_except('Error in click control protocol.')
 
+        self._socket = s
+        self._socket_set = True
         return s
 
     def _write_socket(self, node, key, value):
