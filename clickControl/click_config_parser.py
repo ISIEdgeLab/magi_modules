@@ -123,6 +123,32 @@ class ClickConfigParser(object):
         self._close_control_socket()
         return lines
 
+    def _read_write_status(self, s):
+        def _readline(s):
+            buf = ''
+            while True:
+                c = s.recv(1)
+                if c == '\r':
+                    c = s.recv(1)
+                    if c == '\n':
+                        break
+                
+                buf += c
+            return buf
+
+        resp_line = _readline(s)
+        line = re.split(' |-', resp_line)
+        if line[0] != '200':
+            try:
+                err_msg = _readline(s)
+            except socket.timeout:
+                log.debug('socket read timeout')
+                err_msg = None
+
+            return False, err_msg
+
+        return True, line  
+    
     def _read_socket_response(self, s):
         '''Read the click response. Return response and amounf of data to read.'''
         def _readline(s):
@@ -148,7 +174,6 @@ class ClickConfigParser(object):
 
             return False, err_msg
 
-        log.info(line)
         _, bytecnt = _readline(s).split()
         return True, bytecnt
 
@@ -220,7 +245,7 @@ class ClickConfigParser(object):
 
         s.settimeout(0)
         try:
-            success, resp = self._read_socket_response(s)
+            success, resp = self._read_write_status(s)
             if not success:
                 log.info('click responded with error code to write: {}'.format(resp))
                 return False   # error in response. 
