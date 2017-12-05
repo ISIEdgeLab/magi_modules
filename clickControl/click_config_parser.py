@@ -148,6 +148,7 @@ class ClickConfigParser(object):
 
             return False, err_msg
 
+        log.info(line)
         _, bytecnt = _readline(s).split()
         return True, bytecnt
 
