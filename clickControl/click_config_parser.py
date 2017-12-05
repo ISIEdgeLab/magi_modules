@@ -147,7 +147,8 @@ class ClickConfigParser(object):
 
             return False, err_msg
 
-        return True, line  
+        output = "%s: %s" % (line[0], line[-1])
+        return True, output  
     
     def _read_socket_response(self, s):
         '''Read the click response. Return response and amounf of data to read.'''
@@ -243,7 +244,7 @@ class ClickConfigParser(object):
             log.warn('Unable to write to socket: {} --> {}'.format(key, value))
             return False
 
-        s.settimeout(0)
+        #s.settimeout(0)
         try:
             success, resp = self._read_write_status(s)
             if not success:
@@ -254,7 +255,7 @@ class ClickConfigParser(object):
         except IOError as e:
             log.info('Unable to read response to write: {} --> {}'.format(key, value))
             # This is OK.
-        s.settimeout(1)
+        #s.settimeout(1)
             
         return True
 
