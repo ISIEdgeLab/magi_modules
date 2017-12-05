@@ -217,6 +217,7 @@ class ClickConfigParser(object):
             log.warn('Unable to write to socket: {} --> {}'.format(key, value))
             return False
 
+        s.settimeout(0)
         try:
             success, resp = self._read_socket_response(s)
             if not success:
@@ -227,7 +228,8 @@ class ClickConfigParser(object):
         except IOError as e:
             log.info('Unable to read response to write: {} --> {}'.format(key, value))
             # This is OK.
-        
+        s.settimeout(1)
+            
         return True
 
     def _write_file(self, node, key, value):
