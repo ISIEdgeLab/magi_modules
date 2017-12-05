@@ -60,6 +60,7 @@ class ClickConfigParser(object):
             click_config_except('Click config path ({}) not found.'.format(self._confpath))
 
         if os.path.getmtime(self._confpath) < self._parse_time and not force:
+            log.info("Skipped Parse")
             return
 
         self._parse_time = time.time()
