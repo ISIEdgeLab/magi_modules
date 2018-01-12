@@ -56,26 +56,27 @@ def validateClickInputs(orig_func):
         # verify node is valid
         valid_node = config.get(func_args['node'], False)
         if not valid_node:
-            raise ClickControlError(
-                'key: {user_node} for click object not found' \
-                '.\n\n valid ' \
-                'key targets are: {config_keys}\n'.format(
-                    user_node = func_args['node'],
-                    config_node_keys = config.keys(),
-                )
-            )
-        else:
-            valid_key = valid_node.get(func_args['key'], False)
-            if not valid_key:
-                raise ClickControlError(
-                    'key: {user_key} for click object: {node}'\
-                    'was not found.\n\n valid ' \
-                    'key targets are: {config_keys}\n'.format(
-                        user_key = func_args['key'],
-                        node = func_args['node'],
-                        config_node_keys = valid_node.keys(),
-                    )
-                )
+            #raise ClickControlError(
+            #    'key: {user_node} for click object not found' \
+            #    '.\n\n valid ' \
+            #    'key targets are: {config_node_keys}\n'.format(
+            #        user_node = func_args['node'],
+            #        config_node_keys = config.keys(),
+            #    )
+            #)
+            return (valid_node, user_node, config.keys())
+        valid_key = valid_node.get(func_args['key'], False)
+        if not valid_key:
+            #raise ClickControlError(
+            #    'key: {user_key} for click object: {node} '\
+            #    'was not found.\n\n valid ' \
+            #    'key targets are: {config_user_keys}\n'.format(
+            #        user_key = func_args['key'],
+            #        node = func_args['node'],
+            #        config_user_keys = valid_node.keys(),
+            #    )
+            #)
+            return (valid_key, user_key, valid_node.keys())
         return orig_func(self, *args, **kwargs)
     return wrapper
 
@@ -252,27 +253,28 @@ class clickControlAgent(DispatchAgent):
     @agentmethod()
     def updateDelay(self, msg, link="", delay="0.0ms"):
         # this config can be 'delay' or 'latency'
-        ret = [False]
-        for key in ['latency', 'delay']:
-           latest = self.updateClickConfig(msg, '{}_bw'.format(link), key, delay)
-           ret.append(latest)
-           if latest:
-              return latest
-
-        return any(ret)
+        ret_val = True
+        allowed_keys = self.ccp._config[link].keys()
+        if 'latency' in allowed_keys:
+            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'latency', delay)
+        elif 'delay' in allowed_keys:
+            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'delay', delay)
+        else:
+			ret_val = (False, None, 'key not found in link attribute list')
+        return ret_val
 
     @agentmethod()
     def updateCapacity(self, msg, link="", capacity="1Gbps"):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
-        ret = [False]
-
-        for key in ['bandwidth', 'rate']:
-           latest = self.updateClickConfig(msg, '{}_bw'.format(link), key, capacity)
-           ret.append(latest)
-           if latest:
-              return latest
-
-        return any(ret)
+        ret_val = True
+        allowed_keys = self.ccp._config[link].keys()
+        if 'bandwidth' in allowed_keys:
+            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'bandwidth', delay)
+        elif 'rate' in allowed_keys:
+            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'rate', rate)
+        else:
+			ret_val = (False, None, 'key not found in link attribute list')
+        return ret_val
 
     @agentmethod()
     def updateLossProbability(self, msg, link="", loss="0.0", old=False):
@@ -448,6 +450,7 @@ class clickControlAgent(DispatchAgent):
         if self.UDPRunning:
             self.stopUDPTraffic(msg, node)
 
+        # FIXME: whoever, does this need to be verified to have worked?
         self.updateClickConfig(msg, node, 'rate', rate_in_pps)
 
         if wasRunning:
