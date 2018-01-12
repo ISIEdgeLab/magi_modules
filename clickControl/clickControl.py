@@ -22,11 +22,64 @@ from magi.db import Collection
 from one_hop_neighbors import OneHopNeighbors
 from click_config_parser import ClickConfigParser, ClickConfigParserException
 
+class ClickControlError(Exception):
+    pass
 
 def getAgent(**kwargs):
    agent = clickControlAgent()
    agent.setConfiguration(None, **kwargs)
    return agent
+
+def validateClickInputs(orig_func):
+    def wrapper(self, *args, **kwargs):
+        ''' click excepts everything, this function should be
+        gatekeeper telling user wether the key they are going
+        to use, or maybe even value is going to be valid and
+        cause a change in click '''
+        # there are good coding standards - this is not,
+        # clickcontrol would need touch up to enforce, here
+        # lets make an assumption that config has been parsed
+        # and lets just access the config directly rather than
+        # via a getter function
+        # woe be those that understand the MAGIMessage or why the
+        # args is a single value in a tuple...
+        import ast, re
+        func_inputs = args[0].__dict__['data'].split('\n')[0][5:].strip()
+        # this is a hack
+        replacer = re.compile("([a-zA-Z0-9_]+)")
+        func_inputs = replacer.sub(r'"\1"', func_inputs)
+        func_args = ast.literal_eval(
+            func_inputs
+        )
+        self.ccp.parse(self._confPath)
+        config = self.ccp.get_configuration()
+        # verify node is valid
+        valid_node = config.get(func_args['node'], False)
+        if not valid_node:
+            raise ClickControlError(
+                'key: {user_node} for click object not found' \
+                '.\n\n valid ' \
+                'key targets are: {config_keys}\n'.format(
+                    user_node = func_args['node'],
+                    config_node_keys = config.keys(),
+                )
+            )
+        else:
+            valid_key = valid_node.get(func_args['key'], False)
+            if not valid_key:
+                raise ClickControlError(
+                    'key: {user_key} for click object: {node}'\
+                    'was not found.\n\n valid ' \
+                    'key targets are: {config_keys}\n'.format(
+                        user_key = func_args['key'],
+                        node = func_args['node'],
+                        config_node_keys = valid_node.keys(),
+                    )
+                )
+        return orig_func(self, *args, **kwargs)
+    return wrapper
+
+
 
 class clickControlAgent(DispatchAgent):
     """
@@ -183,9 +236,10 @@ class clickControlAgent(DispatchAgent):
                     
         return True
 
-    @agentmethod()
+    @validateClickInputs
     def updateClickConfig(self, msg, node, key, value):
         '''If you know the exact click node and key you can update teh value directly.'''
+        # Note: if you change the names of these arguments, also do so in validateClickInputs
         retVal = False
         try:
             self.ccp.parse(self._confPath)
@@ -309,7 +363,6 @@ class clickControlAgent(DispatchAgent):
             if os.path.exists("/proc/click/%s/set" % hop[0]):
                 self.updateRoute(None, router=hop[0], ip=prefix, next_hop=hop[1])
 
-                
     @agentmethod()
     def startRouteFlaps(self, msg, flaps, rate):
         if not self.isFlapping:
