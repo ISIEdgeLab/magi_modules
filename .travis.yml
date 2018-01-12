@@ -1,5 +1,7 @@
 language: python
 python:
   - "2.7"
+install:
+  pip install pylint==1.8.1
 script:
-  echo "passed!"
+  pylint --rcfile=clickControl/.pylintrc clickControl/clickControl.py --disable=fixme
