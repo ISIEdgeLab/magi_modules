@@ -55,9 +55,8 @@ def validateClickInputs(orig_func):
         valid_node = config.get(func_args['node'], False)
         if not valid_node:
             raise ClickControlError(
-                'key: {user_node} for click object not found' \
-                '.\n\n valid ' \
-                'key targets are: {config_node_keys}\n'.format(
+                'NODE: {user_node} for click object not found. ' \
+                'valid key targets are: {config_node_keys}\n'.format(
                     user_node=func_args['node'],
                     config_node_keys=config.keys(),
                 )
@@ -65,9 +64,8 @@ def validateClickInputs(orig_func):
         valid_key = valid_node.get(func_args['key'], False)
         if not valid_key:
             raise ClickControlError(
-                'key: {user_key} for click object: {node} '\
-                'was not found.\n\n valid ' \
-                'key targets are: {config_user_keys}\n'.format(
+                'KEY: {user_key} for click object: {node} was not found. '\
+                'valid key targets are: {config_user_keys}\n'.format(
                     user_key=func_args['key'],
                     node=func_args['node'],
                     config_user_keys=valid_node.keys(),
