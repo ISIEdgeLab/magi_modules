@@ -49,7 +49,12 @@ def validateClickInputs(orig_func):
         func_args = ast.literal_eval(
             func_inputs
         )
-        self.ccp.parse(self.ccp.get_conf_path())
+        # in order to get the configuration, we will need to make
+        # sure we have parsed conf file (not guarenteed at time of
+        # calling this function).  Also this will all break if the
+        # confinguration file is not in '/click', but that is not
+        # something that is allowed to be changed in clickControl
+        self.ccp.parse()
         config = self.ccp.get_configuration()
         # verify node is valid
         valid_node = config.get(func_args['node'], False)
