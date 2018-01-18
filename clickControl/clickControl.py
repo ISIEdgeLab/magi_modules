@@ -103,14 +103,14 @@ class ClickControlAgent(DispatchAgent):
         return True
 
     @agentmethod()
-    def startClick(self, msg, user_mode=False, dpdp=True):
+    def startClick(self, msg, user_mode=False, dpdk=True):
         click_running = False
         # Check if click configuration exists
         if not os.path.isfile(self.click_config):
             self.log.error("Click: no such configuration file %s", self.click_config)
             return False
 
-        if not user_mode and not dpdp:
+        if not user_mode and not dpdk:
             # Check if the module is loaded.  If so, uninstall click first and reinstall
             (output, err) = execl.execAndRead("lsmod")
             if err != "":
@@ -133,12 +133,12 @@ class ClickControlAgent(DispatchAgent):
                 return False
 
         else:  # not in kernel - does not daemonize itself, so we handle it as a proc.
-            if dpdp:
+            if dpdk:
                 cmd = 'click  --dpdk -c 0xffffff -n 4 -- -u /click {}'.format(self.click_config)
             elif user_mode:
                 cmd = 'click {} -u /click'.format(self.click_config)
             else:
-                self.log.error('startClick must be one of kernel, user_mode, or dpdp')
+                self.log.error('startClick must be one of kernel, user_mode, or dpdk')
 
             self.log.info('Running cmd: %s', cmd)
             self._click_proc = Popen(cmd.split())
@@ -362,7 +362,8 @@ class ClickControlAgent(DispatchAgent):
     @agentmethod()
     # pylint: disable=dangerous-default-value
     def updateRoutes(self, msg, path=[], ip_addr=""):
-        for path_number in range(len(path) - 1):
+        # this is a hack to do range(len(path)-1)
+        for path_number in enumerate(path[:-1]):
             router = path[path_number]
             next_hop = path[path_number + 1]
             self.updateRoute(msg, router=router, ip_addr=ip_addr, next_hop=next_hop)
