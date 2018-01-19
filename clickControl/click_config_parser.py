@@ -28,6 +28,9 @@ class ClickConfigParser(object):
         self._parse_time = -1.0
         self._parsed = False
 
+    def get_conf_path(self):
+        return self._confpath
+
     def get_value(self, node, key):
         try:
             return self._config[node][key]
