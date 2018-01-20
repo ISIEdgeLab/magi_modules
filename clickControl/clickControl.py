@@ -35,20 +35,6 @@ def validateClickInputs(orig_func):
         gatekeeper telling user wether the key they are going
         to use, or maybe even value is going to be valid and
         cause a change in click '''
-        # there are good coding standards - this is not,
-        # clickcontrol would need touch up to enforce, here
-        # lets make an assumption that config has been parsed
-        # and lets just access the config directly rather than
-        # via a getter function
-        # woe be those that understand the MAGIMessage or why the
-        # args is a single value in a tuple...
-        func_inputs = args[0].__dict__['data'].split('\n')[0][5:].strip()
-        # this is a hack
-        replacer = re.compile("([a-zA-Z0-9_]+)")
-        func_inputs = replacer.sub(r'"\1"', func_inputs)
-        func_args = ast.literal_eval(
-            func_inputs
-        )
         # in order to get the configuration, we will need to make
         # sure we have parsed conf file (not guarenteed at time of
         # calling this function).  Also this will all break if the
@@ -57,22 +43,22 @@ def validateClickInputs(orig_func):
         self.ccp.parse()
         config = self.ccp.get_configuration()
         # verify node is valid
-        valid_node = config.get(func_args['node'], False)
+        valid_node = config.get(kwargs['node'], False)
         if not valid_node:
             raise ClickControlError(
                 'NODE: {user_node} for click object not found. ' \
                 'valid key targets are: {config_node_keys}\n'.format(
-                    user_node=func_args['node'],
+                    user_node=kwargs['node'],
                     config_node_keys=config.keys(),
                 )
             )
-        valid_key = valid_node.get(func_args['key'], False)
+        valid_key = valid_node.get(kwargs['key'], False)
         if not valid_key:
             raise ClickControlError(
                 'KEY: {user_key} for click object: {node} was not found. '\
                 'valid key targets are: {config_user_keys}\n'.format(
-                    user_key=func_args['key'],
-                    node=func_args['node'],
+                    user_key=kwargs['key'],
+                    node=kwargs['node'],
                     config_user_keys=valid_node.keys(),
                 )
             )
