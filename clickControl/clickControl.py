@@ -4,7 +4,6 @@
 # This software is licensed under the GPLv3 license, included in
 # ./GPLv3-LICENSE.txt in the source distribution
 
-import ast
 import logging
 import re
 import os
@@ -40,6 +39,8 @@ def validateClickInputs(orig_func):
         # calling this function).  Also this will all break if the
         # confinguration file is not in '/click', but that is not
         # something that is allowed to be changed in clickControl
+        logging.debug('args to click: %s', args)
+        logging.debug('kwargs to click: %s', kwargs)
         self.ccp.parse()
         config = self.ccp.get_configuration()
         # verify node is valid
