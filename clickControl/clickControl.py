@@ -192,8 +192,7 @@ class ClickControlAgent(DispatchAgent):
         if len(losses) == 0:
             skip_loss = True
 
-        for link_number in enumerate(links):
-            c_link = links[link_number]
+        for link_number, link in enumerate(links):
             if not skip_delay:
                 c_delay = ""
                 if len(delays) == 1:
@@ -201,7 +200,7 @@ class ClickControlAgent(DispatchAgent):
                 else:
                     c_delay = delays[link_number]
 
-                ret = self.updateDelay(msg, link=c_link, delay=c_delay)
+                ret = self.updateDelay(msg, link=link, delay=c_delay)
                 if not ret:
                     return False
 
@@ -212,7 +211,7 @@ class ClickControlAgent(DispatchAgent):
                 else:
                     c_cap = capacities[link_number]
 
-                ret = self.updateCapacity(msg, link=c_link, capacity=c_cap)
+                ret = self.updateCapacity(msg, link=link, capacity=c_cap)
                 if not ret:
                     return False
 
@@ -223,7 +222,7 @@ class ClickControlAgent(DispatchAgent):
                 else:
                     c_loss = losses[link_number]
 
-                ret = self.updateLossProbability(msg, link=c_link, loss=c_loss)
+                ret = self.updateLossProbability(msg, link=link, loss=c_loss)
                 if not ret:
                     return False
 
@@ -350,8 +349,7 @@ class ClickControlAgent(DispatchAgent):
     # pylint: disable=dangerous-default-value
     def updateRoutes(self, msg, path=[], ip_addr=""):
         # this is a hack to do range(len(path)-1)
-        for path_number in enumerate(path[:-1]):
-            router = path[path_number]
+        for path_number, router in enumerate(path[:-1]):
             next_hop = path[path_number + 1]
             self.updateRoute(msg, router=router, ip_addr=ip_addr, next_hop=next_hop)
 
