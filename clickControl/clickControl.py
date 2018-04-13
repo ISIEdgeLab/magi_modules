@@ -20,6 +20,7 @@ from magi.util.agent import agentmethod, DispatchAgent
 from magi.util import execl
 from click_config_parser import ClickConfigParser, ClickConfigParserException
 
+# pylint: disable=invalid-name
 log = logging.getLogger(__name__)
 
 class ClickControlError(Exception):
@@ -234,30 +235,29 @@ class ClickControlAgent(DispatchAgent):
     @agentmethod()
     def updateDelay(self, msg, link="", delay="0.0ms"):
         # this config can be 'delay' or 'latency'
-        ret_val = True
-        bw_link = '{}_bw'.format(link)
-        log.info('updating delay on click node {}'.format(bw_link))
-        # we check node/keys in updateClickConfig so this is kinda redundant although how else can we check
-        # which version of click is running?
+        ret_val = False
+        bw_link = '{link}_bw'.format(link=link)
+        log.info('updating delay on click node %s', bw_link)
+        # we check node/keys in updateClickConfig so this is kinda redundant
+        # although how else can we check which version of click is running?
         allowed_keys = self._allowed_conf_keys(bw_link)
         if not allowed_keys:
-            raise ClickControlError('Bad link given to udpateDelay: {}'.format(link))
+            raise ClickControlError('Bad link given to udpateDelay: {link}'.format(link=link))
 
         if 'latency' in allowed_keys:
             ret_val = self.updateClickConfig(msg, bw_link, 'latency', delay)
         elif 'delay' in allowed_keys:
             ret_val = self.updateClickConfig(msg, bw_link, 'delay', delay)
-        else:
-            ret_val = (False, None, 'key not found in link attribute list')
+
         return ret_val
 
     @agentmethod()
     def updateCapacity(self, msg, link="", capacity="1Gbps"):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
-        ret_val = True
-        bw_link = '{}_bw'.format(link)
-        # we check node/keys in updateClickConfig so this is kinda redundant although how else can we check
-        # which version of click is running?
+        ret_val = False
+        bw_link = '{link}_bw'.format(link=link)
+        # we check node/keys in updateClickConfig so this is kinda redundant
+        # although how else can we check which version of click is running?
         allowed_keys = self._allowed_conf_keys(bw_link)
         if not allowed_keys:
             raise ClickControlError('Bad link given to udpateCapacity: {}'.format(link))
@@ -266,8 +266,7 @@ class ClickControlAgent(DispatchAgent):
             ret_val = self.updateClickConfig(msg, bw_link, 'bandwidth', capacity)
         elif 'rate' in allowed_keys:
             ret_val = self.updateClickConfig(msg, bw_link, 'rate', capacity)
-        else:
-            ret_val = (False, None, 'key not found in link attribute list')
+
         return ret_val
 
     @agentmethod()
@@ -288,7 +287,8 @@ class ClickControlAgent(DispatchAgent):
                 'clear_drops': clear_drops, 'burst': burst, 'drop_prob': drop_prob
             }
             log.info('setting targeted loss config: %s', args)
-            # GTL - may want to call updateClickConfig() instead of modifying the configu directly here. 
+            # GTL - may want to call updateClickConfig() instead of modifying the
+            # configuration directly here.
             for key, value in args.iteritems():
                 if value is not None:   # can be zero or ''!
                     if not self.ccp.set_value(node, key, value):
