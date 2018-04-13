@@ -20,6 +20,8 @@ from magi.util.agent import agentmethod, DispatchAgent
 from magi.util import execl
 from click_config_parser import ClickConfigParser, ClickConfigParserException
 
+log = logging.getLogger(__name__)
+
 class ClickControlError(Exception):
     pass
 
@@ -28,45 +30,6 @@ def getAgent(**kwargs):
     agent.setConfiguration(None, **kwargs)
     return agent
 
-def validateClickInputs(orig_func):
-    def wrapper(self, *args, **kwargs):
-        ''' click excepts everything, this function should be
-        gatekeeper telling user wether the key they are going
-        to use, or maybe even value is going to be valid and
-        cause a change in click '''
-        # in order to get the configuration, we will need to make
-        # sure we have parsed conf file (not guarenteed at time of
-        # calling this function).  Also this will all break if the
-        # confinguration file is not in '/click', but that is not
-        # something that is allowed to be changed in clickControl
-        logging.debug('args to click: %s', args)
-        logging.debug('kwargs to click: %s', kwargs)
-        self.ccp.parse()
-        config = self.ccp.get_configuration()
-        # verify node is valid
-        valid_node = config.get(kwargs['node'], False)
-        if not valid_node:
-            raise ClickControlError(
-                'NODE: {user_node} for click object not found. ' \
-                'valid key targets are: {config_node_keys}\n'.format(
-                    user_node=kwargs['node'],
-                    config_node_keys=config.keys(),
-                )
-            )
-        valid_key = valid_node.get(kwargs['key'], False)
-        if not valid_key:
-            raise ClickControlError(
-                'KEY: {user_key} for click object: {node} was not found. '\
-                'valid key targets are: {config_user_keys}\n'.format(
-                    user_key=kwargs['key'],
-                    node=kwargs['node'],
-                    config_user_keys=valid_node.keys(),
-                )
-            )
-        return orig_func(self, *args, **kwargs)
-    return wrapper
-
-
 # pylint: disable=too-many-instance-attributes
 class ClickControlAgent(DispatchAgent):
     """
@@ -74,7 +37,6 @@ class ClickControlAgent(DispatchAgent):
     """
     def __init__(self):
         DispatchAgent.__init__(self)
-        self.log = logging.getLogger(__name__)
         self.click_config = "/tmp/vrouter.click"
         self.udp_running = False
         self.is_flapping = False
@@ -83,6 +45,16 @@ class ClickControlAgent(DispatchAgent):
         # assumes clicks installed, should we install?
         self._click_proc = None
         self._conf_path = '/click'   # handle to click's runtime configuration.
+
+        # initialize configuration from click.
+        self.ccp.parse(self._conf_path)
+
+    def _allowed_conf_keys(self, node):
+        conf = self.ccp.get_configuration()
+        if node in conf:
+            return conf[node].keys()
+
+        return None
 
     @agentmethod()
     # pylint: disable=unused-argument,no-self-use
@@ -94,14 +66,14 @@ class ClickControlAgent(DispatchAgent):
         click_running = False
         # Check if click configuration exists
         if not os.path.isfile(self.click_config):
-            self.log.error("Click: no such configuration file %s", self.click_config)
+            log.error("Click: no such configuration file %s", self.click_config)
             return False
 
         if not user_mode and not dpdk:
             # Check if the module is loaded.  If so, uninstall click first and reinstall
             (output, err) = execl.execAndRead("lsmod")
             if err != "":
-                self.log.error("Click: %s", err)
+                log.error("Click: %s", err)
                 return False
 
             tokens = output.split()
@@ -116,7 +88,7 @@ class ClickControlAgent(DispatchAgent):
 
             (output, err) = execl.execAndRead("sudo click-install -j 2 %s" % self.click_config)
             if err != "":
-                self.log.error("Click: %s", err)
+                log.error("Click: %s", err)
                 return False
 
         else:  # not in kernel - does not daemonize itself, so we handle it as a proc.
@@ -125,20 +97,20 @@ class ClickControlAgent(DispatchAgent):
             elif user_mode:
                 cmd = 'click {} -u /click'.format(self.click_config)
             else:
-                self.log.error('startClick must be one of kernel, user_mode, or dpdk')
+                log.error('startClick must be one of kernel, user_mode, or dpdk')
 
-            self.log.info('Running cmd: %s', cmd)
+            log.info('Running cmd: %s', cmd)
             self._click_proc = Popen(cmd.split())
             time.sleep(1)   # give it sec to fail...
             if self._click_proc.poll():
-                self.log.error(
+                log.error(
                     "Error starting click in user space. exit=%s",
                     self._click_proc.poll()
                 )
                 self._click_proc = None
                 return False
 
-            self.log.info('user space click started. pid=%s', self._click_proc.pid)
+            log.info('user space click started. pid=%s', self._click_proc.pid)
 
         return True
 
@@ -149,7 +121,7 @@ class ClickControlAgent(DispatchAgent):
         if not self._click_proc:
             (_, err) = execl.execAndRead("sudo click-uninstall")
             if err != "":
-                self.log.error("Click: %s", err)
+                log.error("Click: %s", err)
                 return False
 
             os.rmdir('/click')   # process does not clean up the soket when killed.
@@ -169,15 +141,15 @@ class ClickControlAgent(DispatchAgent):
         # pylint: disable=len-as-condition
         if len(links) != len(delays):
             if len(delays) != 1 and len(delays) != 0:
-                self.log.error("Click: must specify delay for each link or specify only 1 or 0")
+                log.error("Click: must specify delay for each link or specify only 1 or 0")
                 return False
         if len(links) != len(capacities):
             if len(capacities) != 1 and len(capacities) != 0:
-                self.log.error("Click: must specify capacity for each link or specify only 1 or 0")
+                log.error("Click: must specify capacity for each link or specify only 1 or 0")
                 return False
         if len(links) != len(losses):
             if len(losses) != 1 and len(losses) != 0:
-                self.log.error(
+                log.error(
                     "Click: must specify loss probibility for each link or specify only 1 or 0"
                 )
                 return False
@@ -228,17 +200,34 @@ class ClickControlAgent(DispatchAgent):
 
         return True
 
-    @validateClickInputs
     # pylint: disable=unused-argument
     def updateClickConfig(self, msg, node, key, value):
         '''If you know the exact click node and key you can update teh value directly.'''
-        # Note: if you change the names of these arguments, also do so in validateClickInputs
         ret_val = False
         try:
             self.ccp.parse(self._conf_path)
+            config = self.ccp.get_configuration()
+            # make sure the args are valid for this click configuration.
+            if node not in config:
+                raise ClickControlError(
+                    'NODE: "{user_node}" for click object not found. ' \
+                    'valid key targets are: {config_node_keys}\n'.format(
+                        user_node=node,
+                        config_node_keys=config.keys(),
+                    )
+                )
+            if key not in config[node].keys():
+                raise ClickControlError(
+                    'KEY: "{user_key}" for click object "{node}" was not found. '\
+                    'valid key targets are: {config_user_keys}\n'.format(
+                        user_key=key,
+                        node=node,
+                        config_user_keys=config[node].keys(),
+                    )
+                )
             ret_val = self.ccp.set_value(node, key, value)
         except ClickConfigParserException as err:
-            self.log.error(err)
+            log.error(err)
 
         return ret_val
 
@@ -247,7 +236,13 @@ class ClickControlAgent(DispatchAgent):
         # this config can be 'delay' or 'latency'
         ret_val = True
         bw_link = '{}_bw'.format(link)
-        allowed_keys = self.ccp.get_configuration()[bw_link].keys()
+        log.info('updating delay on click node {}'.format(bw_link))
+        # we check node/keys in updateClickConfig so this is kinda redundant although how else can we check
+        # which version of click is running?
+        allowed_keys = self._allowed_conf_keys(bw_link)
+        if not allowed_keys:
+            raise ClickControlError('Bad link given to udpateDelay: {}'.format(link))
+
         if 'latency' in allowed_keys:
             ret_val = self.updateClickConfig(msg, bw_link, 'latency', delay)
         elif 'delay' in allowed_keys:
@@ -261,7 +256,12 @@ class ClickControlAgent(DispatchAgent):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
         ret_val = True
         bw_link = '{}_bw'.format(link)
-        allowed_keys = self.ccp.get_configuration()[bw_link].keys()
+        # we check node/keys in updateClickConfig so this is kinda redundant although how else can we check
+        # which version of click is running?
+        allowed_keys = self._allowed_conf_keys(bw_link)
+        if not allowed_keys:
+            raise ClickControlError('Bad link given to udpateCapacity: {}'.format(link))
+
         if 'bandwidth' in allowed_keys:
             ret_val = self.updateClickConfig(msg, bw_link, 'bandwidth', capacity)
         elif 'rate' in allowed_keys:
@@ -287,19 +287,20 @@ class ClickControlAgent(DispatchAgent):
                 'prefix': prefix, 'dest': destination, 'source': source,
                 'clear_drops': clear_drops, 'burst': burst, 'drop_prob': drop_prob
             }
-            self.log.info('setting targeted loss config: %s', args)
+            log.info('setting targeted loss config: %s', args)
+            # GTL - may want to call updateClickConfig() instead of modifying the configu directly here. 
             for key, value in args.iteritems():
                 if value is not None:   # can be zero or ''!
                     if not self.ccp.set_value(node, key, value):
-                        self.log.info('Error setting %s --> %s in updateTargetedLoss', key, value)
+                        log.info('Error setting %s --> %s in updateTargetedLoss', key, value)
                         return False
 
             if not self.ccp.set_value(node, 'active', str(active).lower()):  # lower case in click
-                self.log.info('Error setting targeted loss link active to %s', active)
+                log.info('Error setting targeted loss link active to %s', active)
                 return False
 
         except ClickConfigParserException as err:
-            self.log.error(err)
+            log.error(err)
             return False
 
         return True
@@ -312,19 +313,19 @@ class ClickControlAgent(DispatchAgent):
         try:
             self.ccp.parse(self._conf_path)
             args = {'timeout': timeout, 'packets': packets, 'sampling_prob': sampling_prob}
-            self.log.info('setting simple reorder config: %s', args)
+            log.info('setting simple reorder config: %s', args)
             for key, value in args.iteritems():
                 if value is not None:
                     if not self.ccp.set_value(node, key, value):
-                        self.log.info('Error setting %s --> %s in updateSimpleReorder', key, value)
+                        log.info('Error setting %s --> %s in updateSimpleReorder', key, value)
                         return False
 
             if not self.ccp.set_value(node, 'active', str(active).lower()):  # lower case in click
-                self.log.info('Error setting simple reorder link active to %s', active)
+                log.info('Error setting simple reorder link active to %s', active)
                 return False
 
         except ClickConfigParserException as err:
-            self.log.error(err)
+            log.error(err)
             return False
 
         return True
@@ -342,7 +343,7 @@ class ClickControlAgent(DispatchAgent):
                 next_hop = "router%s" % re_match.group(0)
             port = self.clg.getPort(router, next_hop)
             if not port:
-                self.log.error("Click: Cannot find link between %s and %s\n", router, next_hop)
+                log.error("Click: Cannot find link between %s and %s\n", router, next_hop)
                 return False
 
         return self.updateClickConfig(msg, router, 'set', '{} {}'.format(ip_addr, port))
@@ -393,7 +394,7 @@ class ClickControlAgent(DispatchAgent):
     def routeFlap(self, flaps, duration):
         while self.is_flapping:
             for flap in flaps:
-                self.log.warn("ip = %s, router = %s, next_hop = %s", flap[0], flap[1], flap[2])
+                log.warn("ip = %s, router = %s, next_hop = %s", flap[0], flap[1], flap[2])
                 self.updateRoute(None, ip_addr=flap[0], router=flap[1], next_hop=flap[2])
             time.sleep(duration)
             if not self.is_flapping:
@@ -419,13 +420,13 @@ class ClickControlAgent(DispatchAgent):
         packet_size = 8000 # 1 KB
         re_match = re.match("[1-9][0-9]*[ ]*[GKMgkm]?[Bb]ps", rate)
         if not re_match:
-            self.log.error("Click: Invalid rate %s", rate)
+            log.error("Click: Invalid rate %s", rate)
             return False
 
         rate = re_match.group(0)
         re_match = re.search("[1-9][0-9]*", rate)
         if not re_match:
-            self.log.error("Click: Invalid rate %s", rate)
+            log.error("Click: Invalid rate %s", rate)
             return False
 
         init_rate = int(re_match.group(0))
@@ -445,7 +446,7 @@ class ClickControlAgent(DispatchAgent):
         re_match = re.search("[Bb]", rate)
         multiplier = 1
         if not re_match:
-            self.log.error("Click: Invalid rate %s", rate)
+            log.error("Click: Invalid rate %s", rate)
             return False
         if re_match.group(0) == "B":
             multiplier = 8
