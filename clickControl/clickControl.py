@@ -246,11 +246,12 @@ class ClickControlAgent(DispatchAgent):
     def updateDelay(self, msg, link="", delay="0.0ms"):
         # this config can be 'delay' or 'latency'
         ret_val = True
-        allowed_keys = self.ccp.get_configuration()[link].keys()
+        bw_link = '{}_bw'.format(link)
+        allowed_keys = self.ccp.get_configuration()[bw_link].keys()
         if 'latency' in allowed_keys:
-            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'latency', delay)
+            ret_val = self.updateClickConfig(msg, bw_link, 'latency', delay)
         elif 'delay' in allowed_keys:
-            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'delay', delay)
+            ret_val = self.updateClickConfig(msg, bw_link, 'delay', delay)
         else:
             ret_val = (False, None, 'key not found in link attribute list')
         return ret_val
@@ -259,11 +260,12 @@ class ClickControlAgent(DispatchAgent):
     def updateCapacity(self, msg, link="", capacity="1Gbps"):
         # Older versions of click use 'rate'. So we set both rate and bandwidth
         ret_val = True
-        allowed_keys = self.ccp.get_configuration()[link].keys()
+        bw_link = '{}_bw'.format(link)
+        allowed_keys = self.ccp.get_configuration()[bw_link].keys()
         if 'bandwidth' in allowed_keys:
-            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'bandwidth', capacity)
+            ret_val = self.updateClickConfig(msg, bw_link, 'bandwidth', capacity)
         elif 'rate' in allowed_keys:
-            ret_val = self.updateClickConfig(msg, '{}_bw'.format(link), 'rate', capacity)
+            ret_val = self.updateClickConfig(msg, bw_link, 'rate', capacity)
         else:
             ret_val = (False, None, 'key not found in link attribute list')
         return ret_val
